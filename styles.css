@@ -433,3 +433,12 @@ button{font-family:inherit}
 .lobby-av.mine{cursor:pointer;box-shadow:0 0 0 2.5px var(--red);transition:transform .15s ease}
 .lobby-av.mine:hover{transform:scale(1.08)}
 .av-placeholder{width:42px;height:42px;border-radius:50%;border:2px dashed #d9ceb6;flex:0 0 auto}
+/* ---------- 随机昵称 ---------- */
+.name-chips{display:flex;flex-wrap:wrap;gap:8px;margin:11px 0 10px}
+.name-chip{
+  border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;
+  font-size:13px;cursor:pointer;color:#5b5246;font-family:inherit;transition:all .12s ease;
+}
+.name-chip:hover{background:#fff3d6;border-color:#efd08a;transform:translateY(-1px)}
+.name-chip.is-on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ghost-btn.tiny{padding:8px 16px;font-size:13px;margin-bottom:14px}
