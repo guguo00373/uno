@@ -7,6 +7,15 @@
   var COLOR_CN = { red: "红色", yellow: "黄色", green: "绿色", blue: "蓝色" };
   var COLOR_ORDER = { red: 0, yellow: 1, green: 2, blue: 3, wild: 4 };
   var VALUE_ORDER = { skip: 10, reverse: 11, draw2: 12, wild: 13, wild4: 14 };
+  var AVATARS = ["cat", "panda", "duck", "bunny", "bear", "frog", "fox", "octopus"];
+  function avatarName(i) { var k = AVATARS.length; var n = Math.floor(Number(i) || 0) % k; return AVATARS[n < 0 ? n + k : n]; }
+  function avatarEl(player, cls) {
+    var img = document.createElement("img");
+    img.className = "avatar" + (cls ? " " + cls : "");
+    img.alt = "";
+    img.src = "./avatars/" + avatarName(player && player.avatar != null ? player.avatar : 0) + ".svg";
+    return img;
+  }
 
   // ---------------- 音效 ----------------
   var soundOn = true;
@@ -173,12 +182,17 @@
       box.className = "opponent" + (i === state.turn && !state.over ? " is-turn" : "");
       var head = document.createElement("div");
       head.className = "opponent-head";
+      var who = document.createElement("span");
+      who.className = "who";
+      who.appendChild(avatarEl(p));
       var left = document.createElement("span");
+      left.className = "who-name";
       left.textContent = p.name;
+      who.appendChild(left);
       var right = document.createElement("span");
       right.className = "card-count";
       right.textContent = p.hand.length + " 张";
-      head.appendChild(left);
+      head.appendChild(who);
       head.appendChild(right);
       var hand = document.createElement("div");
       hand.className = "opponent-hand";
@@ -237,7 +251,7 @@
     var idx = bottomIndex();
     var p = state.players[idx];
     if (!p) return;
-    els.myName.textContent = p.name;
+    showMyAvatar(p);
     els.myCount.textContent = p.hand.length + " 张";
 
     var needReveal = state.mode === "local" && !state.revealed && !state.over;
@@ -271,6 +285,14 @@
     });
   }
 
+  function showMyAvatar(p) {
+    var head = els.myName.parentNode;
+    if (!head) return;
+    var img = head.querySelector(".avatar.mine");
+    if (!img) { img = document.createElement("img"); img.className = "avatar mine"; img.alt = ""; head.insertBefore(img, els.myName); }
+    img.src = "./avatars/" + avatarName(p && p.avatar != null ? p.avatar : 0) + ".svg";
+    els.myName.textContent = p ? p.name : "你";
+  }
   function renderBar() {
     var uno = els.unoBtn;
     var idx = bottomIndex();
@@ -597,7 +619,7 @@
         ? ["你", "电脑 A", "电脑 B", "电脑 C"]
         : ["玩家 1", "玩家 2", "玩家 3", "玩家 4"]);
     var players = [];
-    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "bot" && i !== 0) });
+    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "bot" && i !== 0), avatar: roster && roster[i] && roster[i].avatar != null ? roster[i].avatar : i });
 
     // 发牌
     for (var r = 0; r < 7; r++) {
@@ -763,6 +785,8 @@
     toast: toast,
     log: log,
     cardFaceEl: cardFaceEl,
+    AVATARS: AVATARS,
+    avatarName: avatarName,
     callUnoFor: callUnoFor,
     humanDrawFor: drawForSeat,
     passFor: passForSeat,
