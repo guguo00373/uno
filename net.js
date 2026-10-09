@@ -301,6 +301,7 @@
   // ---------- 开局（房主） ----------
   function beginGame() {
     if (net.role !== "host") return;
+    if (net.roster.length < 2) { API.toast("至少两个人（或者加个电脑）才能开局"); return; }
     net.started = true;
     S.mode = "net";
     S.role = "host";
@@ -313,6 +314,21 @@
     publishState();
   }
 
+  function removeBot(botId) {
+    if (net.role !== "host" || net.started) return;
+    var idx = -1;
+    if (botId) {
+      net.roster.forEach(function (p, i) { if (p.bot && p.id === botId) idx = i; });
+    } else {
+      for (var i = net.roster.length - 1; i >= 0; i--) { if (net.roster[i].bot) { idx = i; break; } }
+    }
+    if (idx < 0) return;
+    var removed = net.roster[idx].name;
+    net.roster.splice(idx, 1);
+    API.toast("已移除 " + removed);
+    publishRoster();
+    renderLobby();
+  }
   function addBot() {
     if (net.role !== "host" || net.started) return;
     if (net.roster.length >= (S.count || 4)) { API.toast("人数已经满了"); return; }
@@ -334,6 +350,7 @@
     el.shareLink.value = link;
     el.beginBtn.hidden = net.role !== "host";
     el.addBotBtn.hidden = net.role !== "host";
+    el.removeBotBtn.hidden = net.role !== "host";
     renderLobby();
   }
 
@@ -354,6 +371,12 @@
       tag.className = "lobby-tag";
       tag.textContent = p.bot ? "电脑" : (i === 0 ? "房主" : "玩家");
       row.appendChild(dot); row.appendChild(nm); row.appendChild(tag);
+      if (p.bot && net.role === "host") {
+        var del = document.createElement("button");
+        del.type = "button"; del.className = "lobby-del"; del.textContent = "\u00d7"; del.title = "移除这个电脑";
+        del.addEventListener("click", function () { removeBot(p.id); });
+        row.appendChild(del);
+      }
       host.appendChild(row);
     });
     for (var k = net.roster.length; k < (S.count || 4); k++) {
@@ -365,6 +388,9 @@
       host.appendChild(empty);
     }
     if (net.role === "host") {
+      var botCount = net.roster.filter(function (p) { return p.bot; }).length;
+      if (el.removeBotBtn) el.removeBotBtn.disabled = botCount === 0;
+      if (el.addBotBtn) el.addBotBtn.disabled = net.roster.length >= (S.count || 4);
       setStatus(net.roster.length + " / " + (S.count || 4) + " 人已就位，可以开始了");
     }
   }
@@ -414,7 +440,7 @@
     el.home = $("home"); el.game = $("game"); el.lobby = $("lobby");
     el.roomCode = $("lobbyRoomCode"); el.shareLink = $("shareLink"); el.copyLinkBtn = $("copyLinkBtn");
     el.lobbyPlayers = $("lobbyPlayers"); el.lobbyStatus = $("lobbyStatus");
-    el.beginBtn = $("beginBtn"); el.addBotBtn = $("addBotBtn"); el.lobbyLeaveBtn = $("lobbyLeaveBtn");
+    el.beginBtn = $("beginBtn"); el.addBotBtn = $("addBotBtn"); el.removeBotBtn = $("removeBotBtn"); el.lobbyLeaveBtn = $("lobbyLeaveBtn");
     el.resultOverlay = $("resultOverlay"); el.resultEmoji = $("resultEmoji");
     el.resultTitle = $("resultTitle"); el.resultDetail = $("resultDetail"); el.againBtn = $("againBtn");
     el.nickInput = $("nickInput"); el.roomInput = $("roomInput");
@@ -434,6 +460,7 @@
     el.lobbyLeaveBtn.addEventListener("click", function () { leave(false); });
     el.beginBtn.addEventListener("click", beginGame);
     el.addBotBtn.addEventListener("click", addBot);
+    el.removeBotBtn.addEventListener("click", function () { removeBot(null); });
 
     API.netAction = function (action) { send(action); };
     API.onRender = function () { if (net.role === "host" && net.started) publishState(); };
