@@ -114,7 +114,7 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true,
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null,
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 780
   };
 
@@ -162,6 +162,40 @@
     return el;
   }
 
+  function renderChallenge() {
+    if (!els.challengeBox) return;
+    var ch = state.challenge;
+    var mySeat = bottomIndex();
+    var show = !!ch && Number(ch.victim) === Number(mySeat) && isHuman(mySeat) && !state.over;
+    els.challengeBox.hidden = !show;
+    if (show) {
+      els.challengeWho.textContent = state.players[ch.by] ? state.players[ch.by].name : "对手";
+      var left = Math.max(0, Math.ceil((ch.deadline - Date.now()) / 1000));
+      els.challengeTimer.textContent = left + " 秒后自动认了";
+    } else if (ch) {
+      els.challengeBox.hidden = false;
+      els.challengeWho.textContent = state.players[ch.victim] ? state.players[ch.victim].name : "对方";
+      els.challengeTimer.textContent = "正在等 TA 决定是否质疑…";
+      var acts = els.challengeBox.querySelector(".challenge-actions");
+      if (acts) acts.style.display = "none";
+    }
+    if (els.challengeBox && !show) {
+      var acts2 = els.challengeBox.querySelector(".challenge-actions");
+      if (acts2) acts2.style.display = ch ? "none" : "";
+    } else if (els.challengeBox) {
+      var acts3 = els.challengeBox.querySelector(".challenge-actions");
+      if (acts3) acts3.style.display = "";
+    }
+    var rv = state.reveal;
+    if (els.revealBox) {
+      els.revealBox.hidden = !rv;
+      if (rv) {
+        els.revealTitle.textContent = (rv.guilty ? "质疑成功 ✊ " : "质疑失败 ✋ ") + (state.players[rv.seat] ? state.players[rv.seat].name : "") + " 出 +4 时的手牌：";
+        els.revealCards.innerHTML = "";
+        (rv.cards || []).forEach(function (c) { els.revealCards.appendChild(cardFaceEl(c)); });
+      }
+    }
+  }
   function bottomIndex() { if (state.mode === "net") return state.seat || 0; return state.mode === "bot" ? 0 : state.turn; }
 
   function render() {
@@ -169,6 +203,7 @@
     renderTable();
     renderHand();
     renderBar();
+    renderChallenge();
     if (window.__UNO_API__ && window.__UNO_API__.onRender) window.__UNO_API__.onRender();
   }
 
@@ -276,7 +311,7 @@
       return;
     }
 
-    var mine = isHuman(idx) && idx === state.turn && !state.over && !state.busy;
+    var mine = isHuman(idx) && idx === state.turn && !state.over && !state.busy && !state.challenge;
     host.classList.toggle("tight", p.hand.length > 6);
     p.hand.forEach(function (card) {
       var el = cardFaceEl(card);
@@ -356,6 +391,7 @@
     var p = state.players[pi];
     var at = p.hand.indexOf(card);
     if (at < 0) return;
+    var prevColor = state.color;
     p.hand.splice(at, 1);
     state.discard.push(card);
     state.color = card.c === "wild" ? chosenColor : card.c;
@@ -373,6 +409,8 @@
       }
     }
     if (p.hand.length === 0) { finish(pi); return; }
+
+    if (card.v === "wild4") { startChallenge(pi, prevColor); render(); return; }
 
     applyEffect(card, pi);
     render();
@@ -400,6 +438,47 @@
     }
   }
 
+  function startChallenge(by, prevColor) {
+    var victim = idxAfter(by, 1);
+    state.challenge = { by: by, victim: victim, prevColor: prevColor, deadline: Date.now() + 8000 };
+    log(state.players[by].name + " 打出 +4，等待 " + state.players[victim].name + " 决定是否质疑");
+    clearTimeout(state.challengeTimer);
+    if (isBot(victim)) {
+      state.challengeTimer = setTimeout(function () { respondChallenge(victim, Math.random() < 0.35); }, 1300);
+    } else {
+      state.challengeTimer = setTimeout(function () { respondChallenge(victim, false, true); }, 8000);
+    }
+  }
+  function respondChallenge(responder, yes, auto) {
+    var ch = state.challenge;
+    if (!ch) return;
+    if (Number(ch.victim) !== Number(responder)) return;
+    clearTimeout(state.challengeTimer);
+    state.challengeTimer = null;
+    state.challenge = null;
+    var by = ch.by, victim = ch.victim;
+    var guilty = state.players[by].hand.some(function (c) { return c.c === ch.prevColor; });
+    state.reveal = { seat: by, cards: state.players[by].hand.map(function (c) { return { c: c.c, v: c.v, id: c.id }; }), guilty: guilty };
+    if (!yes) {
+      drawTo(state.players[victim], 4);
+      log(state.players[victim].name + (auto ? " 超时未质疑，" : " 认了，") + "抽 4 张并停一轮");
+      passTurn(by, 2);
+    } else if (guilty) {
+      drawTo(state.players[by], 4);
+      log("质疑成功！" + state.players[by].name + " 手里还有 " + (COLOR_CN[ch.prevColor] || "") + "，改由 TA 抽 4 张");
+      toast("质疑成功！TA 手里还有 " + (COLOR_CN[ch.prevColor] || "") + " 牌");
+      passTurn(by, 1);
+    } else {
+      drawTo(state.players[victim], 6);
+      log("质疑失败！" + state.players[victim].name + " 抽 6 张并停一轮");
+      toast("质疑失败，抽 6 张");
+      passTurn(by, 2);
+    }
+    SFX.nope();
+    clearTimeout(state.revealTimer);
+    state.revealTimer = setTimeout(function () { state.reveal = null; render(); }, 5000);
+    render();
+  }
   function passTurn(from, steps) {
     state.turn = (from + state.dir * steps + n() * 10) % n();
     afterTurnChange();
@@ -415,6 +494,7 @@
   function maybeScheduleBot() {
     clearTimeout(state.timer);
     if (state.over) return;
+    if (state.challenge) return;
     if (state.role === "guest") return;
     if (!isBot(state.turn)) return;
     state.busy = true;
@@ -474,7 +554,7 @@
 
   // ---------------- 玩家操作 ----------------
   function humanPlay(card) {
-    if (state.over || state.busy) return;
+    if (state.over || state.busy || state.challenge) return;
     var pi = state.turn;
     if (!isHuman(pi)) return;
     if (state.mode === "local" && !state.revealed) return;
@@ -487,7 +567,7 @@
   var pendingWild = null;
 
   function humanDraw() {
-    if (state.over || state.busy) return;
+    if (state.over || state.busy || state.challenge) return;
     var pi = state.turn;
     if (!isHuman(pi)) return;
     if (state.mode === "local" && !state.revealed) return;
@@ -594,6 +674,16 @@
     SFX.nope();
     render();
   }
+  function answerChallenge(yes) {
+    var mySeat = bottomIndex();
+    if (!state.challenge || Number(state.challenge.victim) !== Number(mySeat)) return;
+    if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") {
+      state.challenge = null; renderChallenge();
+      window.__UNO_API__.netAction({ type: "challenge", yes: !!yes });
+      return;
+    }
+    respondChallenge(mySeat, !!yes);
+  }
   function catchUno(target) {
     if (state.over) return;
     if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") {
@@ -669,6 +759,9 @@
     state.canPass = false;
     state.unoCalled = players.map(function () { return false; });
     state.exposed = players.map(function () { return false; });
+    clearTimeout(state.challengeTimer); state.challengeTimer = null;
+    clearTimeout(state.revealTimer); state.revealTimer = null;
+    state.challenge = null; state.reveal = null;
     state.revealed = mode !== "local";
     state.busy = false;
     state.scores = prevScores;
@@ -726,6 +819,18 @@
     els.resultDetail = $("resultDetail");
     els.againBtn = $("againBtn");
     els.homeBtn = $("homeBtn");
+    els.challengeBox = $("challengeBox");
+    els.challengeWho = $("challengeWho");
+    els.challengeTimer = $("challengeTimer");
+    els.revealBox = $("revealBox");
+    els.revealTitle = $("revealTitle");
+    els.revealCards = $("revealCards");
+    if (els.challengeBox) {
+      var cYes = $("challengeYesBtn"), cNo = $("challengeNoBtn");
+      if (cYes) cYes.addEventListener("click", function () { answerChallenge(true); });
+      if (cNo) cNo.addEventListener("click", function () { answerChallenge(false); });
+    }
+    setInterval(function () { if (state.challenge || state.reveal) render(); }, 1000);
     els.toast = $("toast");
     els.log = $("log");
 
@@ -814,6 +919,7 @@
     avatarName: avatarName,
     callUnoFor: callUnoFor,
     catchUnoFor: catchUnoFor,
+    respondChallenge: respondChallenge,
     humanDrawFor: drawForSeat,
     passFor: passForSeat,
     netAction: null,
