@@ -46,6 +46,37 @@
   function pubTopic() { return PREFIX + net.room + "/pub"; }
   function privTopic(id) { return PREFIX + net.room + "/p/" + id; }
   function now() { return Date.now(); }
+  var FUN_NAMES = [
+    "摸鱼大师", "手气爆棚", "专坑队友", "UNO女王", "卡牌刺客", "欧皇本皇", "非酋头子", "出牌机器",
+    "忘喊UNO", "一手好牌", "摸牌童子", "全场最慢", "躺赢选手", "拆迁队长", "红牌警告", "变色龙先生",
+    "压轴大王", "手里没牌", "淡定吃瓜", "炸弹专业户", "运气选手", "就是不出", "抽牌狂魔", "一张都不剩",
+    "苟到最后", "反向操作", "默默变大", "全场焦点", "我要蓝色", "见红就慌", "出啥都赢", "划水冠军",
+    "天选之子", "卡组玄学", "摸什么来什么", "只想赢一把", "再来一张", "谁先眨眼", "偷偷攒牌", "最后一张牌"
+  ];
+  var nameBatch = [];
+  function shuffleNames() {
+    var p = FUN_NAMES.slice();
+    for (var i = p.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = p[i]; p[i] = p[j]; p[j] = t; }
+    nameBatch = p.slice(0, 6);
+    renderNameChips();
+  }
+  function renderNameChips() {
+    var box = $("nameChips"); if (!box) return;
+    var cur = (($("nickInput") || {}).value || "").trim();
+    box.innerHTML = "";
+    nameBatch.forEach(function (nm) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "name-chip"; b.textContent = nm;
+      if (cur === nm) b.classList.add("is-on");
+      b.addEventListener("click", function () {
+        var inp = $("nickInput"); if (!inp) return;
+        inp.value = nm;
+        try { localStorage.setItem("uno-name", nm); } catch (e) {}
+        renderNameChips();
+      });
+      box.appendChild(b);
+    });
+  }
   var AV = API.AVATARS || ["cat"];
   function avatarName(i) { var k = AV.length; var n = Math.floor(Number(i) || 0) % k; return AV[n < 0 ? n + k : n]; }
   function savedAvatar() { try { var v = localStorage.getItem("uno-avatar"); return v == null ? 0 : Number(v); } catch (e) { return 0; } }
@@ -522,7 +553,11 @@
     }
     if (el.nickInput) {
       el.nickInput.addEventListener("change", function () { localStorage.setItem("uno-name", el.nickInput.value.trim()); });
+      el.nickInput.addEventListener("input", function () { renderNameChips(); });
     }
+    var shuf = $("shuffleNamesBtn");
+    if (shuf) shuf.addEventListener("click", shuffleNames);
+    shuffleNames();
   }
 
   window.__NET__ = net;
