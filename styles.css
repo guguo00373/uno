@@ -454,3 +454,21 @@ button{font-family:inherit}
   font-family:inherit;transition:all .12s ease;animation:pop .25s ease;
 }
 .catch-btn:hover{background:var(--red);color:#fff;border-color:var(--red)}
+/* ---------- +4 质疑 ---------- */
+.challenge-box{
+  margin-top:12px;padding:14px 16px;border-radius:16px;
+  background:#fff6e2;border:1.5px solid #f0cf8e;text-align:center;
+  animation:pop .25s ease;
+}
+.challenge-box p{margin:0 0 10px;font-size:14px;color:#7a5312}
+.challenge-box b{color:var(--red)}
+.challenge-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.challenge-actions .primary-btn,.challenge-actions .ghost-btn{padding:10px 20px;font-size:14px}
+.challenge-box .hint{margin:10px 0 0;font-size:12px}
+.reveal-box{
+  margin-top:12px;padding:14px 16px;border-radius:16px;
+  background:#fffdf8;border:1px dashed var(--line);text-align:center;animation:pop .25s ease;
+}
+.reveal-title{margin:0 0 10px;font-size:14px;font-weight:700;color:#5b5246}
+.reveal-cards{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.reveal-cards .card{--cw:52px;width:52px}
