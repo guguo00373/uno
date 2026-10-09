@@ -677,6 +677,8 @@
     els.resultEmoji = $("resultEmoji");
     els.resultTitle = $("resultTitle");
     els.resultDetail = $("resultDetail");
+    els.againBtn = $("againBtn");
+    els.homeBtn = $("homeBtn");
     els.toast = $("toast");
     els.log = $("log");
 
