@@ -201,6 +201,7 @@
       deckCount: S.deck.length,
       discardTop: top ? { c: top.c, v: top.v, id: top.id } : null,
       over: !!S.over, winner: S.winnerIndex != null ? S.winnerIndex : null,
+      exposed: (S.exposed || []).map(function (x) { return !!x; }),
       scores: S.scores.slice(), round: S.round
     };
   }
@@ -314,6 +315,7 @@
     S.dir = msg.dir;
     S.turn = msg.turn;
     S.color = msg.color;
+    S.exposed = (msg.exposed || []).map(function (x) { return !!x; });
     S.over = !!msg.over;
     S.winnerIndex = msg.winner;
     var prevHand = (S.players[seat] && S.players[seat].hand) || [];
@@ -349,7 +351,12 @@
     if (seat < 0) return;
     var a = msg.action || {};
     if (a.type === "uno") {
-      if (S.turn === seat && S.players[seat].hand.length <= 2) API.callUnoFor(seat);
+      if (S.players[seat] && S.players[seat].hand.length <= 2) API.callUnoFor(seat);
+      publishState();
+      return;
+    }
+    if (a.type === "catch") {
+      API.catchUnoFor(seat, Number(a.target));
       publishState();
       return;
     }
