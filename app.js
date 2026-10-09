@@ -104,7 +104,7 @@
   // ---------------- 状态 ----------------
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
-    mode: "bot", count: 4, round: 1, scores: [], wins: [],
+    mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
     over: true, canPass: false, unoCalled: [], revealed: true,
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 780
   };
@@ -114,7 +114,7 @@
     var x = (from + state.dir * k) % n();
     return x < 0 ? x + n() : x;
   }
-  function isBot(i) { return state.mode === "bot" && i !== 0; }
+  function isBot(i) { var p = state.players[i]; return p ? !!p.bot : false; }
   function isHuman(i) { return !isBot(i); }
   function cur() { return state.players[state.turn]; }
 
@@ -153,13 +153,14 @@
     return el;
   }
 
-  function bottomIndex() { return state.mode === "bot" ? 0 : state.turn; }
+  function bottomIndex() { if (state.mode === "net") return state.seat || 0; return state.mode === "bot" ? 0 : state.turn; }
 
   function render() {
     renderOpponents();
     renderTable();
     renderHand();
     renderBar();
+    if (window.__UNO_API__ && window.__UNO_API__.onRender) window.__UNO_API__.onRender();
   }
 
   function renderOpponents() {
@@ -275,7 +276,7 @@
     var idx = bottomIndex();
     var p = state.players[idx];
     var humanTurn = p && isHuman(idx) && idx === state.turn && !state.over;
-    var armed = state.graceTimer && state.graceLeft > 0;
+    var armed = state.graceTimer && state.graceLeft > 0 && idx === state.turn;
     uno.disabled = !(humanTurn && p.hand.length <= 2);
     uno.classList.toggle("armed", !!armed);
     if (armed) uno.textContent = "UNO! " + state.graceLeft;
@@ -387,6 +388,7 @@
   function maybeScheduleBot() {
     clearTimeout(state.timer);
     if (state.over) return;
+    if (state.role === "guest") return;
     if (!isBot(state.turn)) return;
     state.busy = true;
     render();
@@ -451,6 +453,7 @@
     if (state.mode === "local" && !state.revealed) return;
     if (!canPlay(card)) { SFX.nope(); toast("这张牌接不上，换一张或抽牌"); return; }
     if (card.c === "wild") { pendingWild = card; els.colorPicker.hidden = false; return; }
+    if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") { window.__UNO_API__.netAction({ type: "play", id: card.id, color: null }); return; }
     playCard(pi, card, null);
   }
 
@@ -461,6 +464,7 @@
     var pi = state.turn;
     if (!isHuman(pi)) return;
     if (state.mode === "local" && !state.revealed) return;
+    if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") { window.__UNO_API__.netAction({ type: "draw" }); return; }
     if (state.canPass) { toast("已经抽过了，打出去或者点「过牌」"); return; }
     var p = state.players[pi];
     var got = drawTo(p, 1);
@@ -507,6 +511,7 @@
     if (!isHuman(pi)) return;
     var p = state.players[pi];
     if (p.hand.length > 2) { toast("牌还多着呢"); return; }
+    if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") { window.__UNO_API__.netAction({ type: "uno" }); return; }
     state.unoCalled[pi] = true;
     clearInterval(state.graceTimer);
     state.graceTimer = null;
@@ -517,9 +522,45 @@
     render();
   }
 
+  // ---------------- 联机：房主代客机执行 ----------------
+  function drawForSeat(seat) {
+    if (state.over) return;
+    var p = state.players[seat];
+    if (!p || state.canPass) return;
+    var got = drawTo(p, 1);
+    SFX.draw();
+    if (!got.length) { passTurn(seat, 1); return; }
+    if (canPlay(got[0])) {
+      state.canPass = true;
+      log(p.name + " 抽了一张能打的牌");
+      render();
+    } else {
+      log(p.name + " 抽了一张，过牌");
+      passTurn(seat, 1);
+    }
+  }
+  function passForSeat(seat) {
+    if (state.over || !state.canPass) return;
+    state.canPass = false;
+    passTurn(seat, 1);
+  }
+  function callUnoFor(seat) {
+    if (state.over) return;
+    var p = state.players[seat];
+    if (!p || p.hand.length > 2) return;
+    state.unoCalled[seat] = true;
+    clearInterval(state.graceTimer);
+    state.graceTimer = null;
+    state.graceLeft = 0;
+    SFX.uno();
+    log(p.name + " 喊了 UNO！");
+    render();
+  }
+
   // ---------------- 结束 ----------------
   function finish(pi) {
     state.over = true;
+    state.winnerIndex = pi;
     clearTimeout(state.timer);
     clearInterval(state.graceTimer);
     state.graceTimer = null;
@@ -538,18 +579,25 @@
     els.resultDetail.textContent = "本局获得 " + gained + " 分。其他玩家手里还剩 " +
       state.players.reduce(function (a, p, i) { return i === pi ? a : a + p.hand.length; }, 0) + " 张牌。";
     els.resultOverlay.hidden = false;
+    els.againBtn.hidden = (state.mode === "net");
+    if (window.__UNO_API__ && window.__UNO_API__.onGameEnd) window.__UNO_API__.onGameEnd();
   }
 
   // ---------------- 开局 ----------------
   function startGame(keepScores) {
-    var count = state.count;
+    var roster = state.roster;
+    if (state.mode !== "net") state.roster = null;
+    var count = roster ? roster.length : state.count;
     var mode = state.mode;
+    state.count = count;
     var deck = shuffle(buildDeck());
-    var names = mode === "bot"
-      ? ["你", "电脑 A", "电脑 B", "电脑 C"]
-      : ["玩家 1", "玩家 2", "玩家 3", "玩家 4"];
+    var names = roster
+      ? roster.map(function (r) { return r.name; })
+      : (mode === "bot"
+        ? ["你", "电脑 A", "电脑 B", "电脑 C"]
+        : ["玩家 1", "玩家 2", "玩家 3", "玩家 4"]);
     var players = [];
-    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: mode === "bot" && i !== 0 });
+    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "bot" && i !== 0) });
 
     // 发牌
     for (var r = 0; r < 7; r++) {
@@ -574,7 +622,7 @@
     state.over = false;
     state.canPass = false;
     state.unoCalled = players.map(function () { return false; });
-    state.revealed = mode === "bot";
+    state.revealed = mode !== "local";
     state.busy = false;
     state.scores = prevScores;
     state.wins = prevWins;
@@ -596,6 +644,7 @@
   }
 
   function goHome() {
+    if (window.__UNO_API__ && window.__UNO_API__.onQuit) window.__UNO_API__.onQuit();
     clearTimeout(state.timer);
     clearInterval(state.graceTimer);
     state.graceTimer = null;
@@ -642,6 +691,10 @@
       state.mode = b.dataset.mode;
       this.querySelectorAll(".seg-btn").forEach(function (x) { x.classList.remove("is-active"); });
       b.classList.add("is-active");
+      var isNet = state.mode === "net";
+      var netRow = $("netRow"), soloRow = $("soloRow");
+      if (netRow) netRow.hidden = !isNet;
+      if (soloRow) soloRow.hidden = isNet;
       $("startBtn").textContent = state.mode === "bot" ? "开始游戏" : "开一局（轮流上手）";
     });
 
@@ -663,6 +716,7 @@
     $("drawPile").addEventListener("click", humanDraw);
     els.passBtn.addEventListener("click", function () {
       if (state.over || !state.canPass) return;
+      if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") { window.__UNO_API__.netAction({ type: "pass" }); return; }
       var pi = state.turn;
       state.canPass = false;
       passTurn(pi, 1);
@@ -672,7 +726,11 @@
     els.colorPicker.addEventListener("click", function (e) {
       var b = e.target.closest(".color-choice"); if (!b) return;
       els.colorPicker.hidden = true;
-      if (pendingWild) { var c = pendingWild; pendingWild = null; playCard(state.turn, c, b.dataset.color); }
+      if (pendingWild) {
+        var c = pendingWild; pendingWild = null;
+        if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") window.__UNO_API__.netAction({ type: "play", id: c.id, color: b.dataset.color });
+        else playCard(state.turn, c, b.dataset.color);
+      }
     });
 
     $("soundToggle").addEventListener("click", function () {
@@ -693,6 +751,24 @@
 
   // 首屏渲染首页
   window.__UNO__ = state;
+  window.__UNO_API__ = {
+    state: state,
+    render: render,
+    startGame: startGame,
+    playCard: playCard,
+    drawTo: drawTo,
+    canPlay: canPlay,
+    toast: toast,
+    log: log,
+    cardFaceEl: cardFaceEl,
+    callUnoFor: callUnoFor,
+    humanDrawFor: drawForSeat,
+    passFor: passForSeat,
+    netAction: null,
+    onRender: null,
+    onGameEnd: null,
+    onQuit: null
+  };
   els.home.hidden = false;
   els.game.hidden = true;
 })();
