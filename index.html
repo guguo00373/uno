@@ -57,14 +57,27 @@
         </div>
       </div>
       <div class="setup-row">
-        <span class="setup-label">对手</span>
-        <div class="seg" id="modeSeg" role="group" aria-label="对手">
+        <span class="setup-label">怎么玩</span>
+        <div class="seg" id="modeSeg" role="group" aria-label="玩法">
           <button type="button" class="seg-btn is-active" data-mode="bot">人机对战</button>
           <button type="button" class="seg-btn" data-mode="local">同桌轮流</button>
+          <button type="button" class="seg-btn" data-mode="net">联机对战</button>
         </div>
       </div>
-      <button id="startBtn" class="primary-btn wide" type="button">开始游戏</button>
-      <p class="hint">人机对战：你和电脑轮流出牌。同桌轮流：一台设备，大家轮着上手。</p>
+      <div id="soloRow">
+        <button id="startBtn" class="primary-btn wide" type="button">开始游戏</button>
+      </div>
+      <div id="netRow" hidden>
+        <label class="field-label" for="nickInput">你的名字</label>
+        <input id="nickInput" class="text-input" type="text" maxlength="10" placeholder="例如：小明" />
+        <button id="createRoomBtn" class="primary-btn wide" type="button">创建房间（拿链接）</button>
+        <label class="field-label" for="roomInput">已经拿到房间号？</label>
+        <div class="join-row">
+          <input id="roomInput" class="text-input" type="text" maxlength="9" placeholder="房间号，如 UNO-4F7K" />
+          <button id="joinRoomBtn" class="ghost-btn" type="button">加入房间</button>
+        </div>
+      </div>
+      <p class="hint">人机对战：你和电脑轮流出牌。同桌轮流：一台设备，大家轮着上手。联机对战：建个房间，把链接发给朋友，各用各的手机一起打。</p>
     </div>
 
     <section id="rules" class="rules">
@@ -107,6 +120,28 @@
     </section>
   </section>
 
+  <section id="lobby" class="screen" hidden>
+    <div class="panel lobby">
+      <div class="lobby-head">
+        <div>
+          <p class="eyebrow">房间已开好</p>
+          <h2 id="lobbyRoomCode">----</h2>
+        </div>
+        <button id="lobbyLeaveBtn" class="ghost-btn" type="button">离开房间</button>
+      </div>
+      <p class="hint">把下面的链接发给朋友，他们点开就能进来；也可以让他们在首页输入房间号加入。</p>
+      <div class="share-row">
+        <input id="shareLink" class="text-input" type="text" readonly />
+        <button id="copyLinkBtn" class="primary-btn" type="button">复制链接</button>
+      </div>
+      <div class="lobby-players" id="lobbyPlayers"></div>
+      <div class="lobby-actions">
+        <button id="addBotBtn" class="ghost-btn" type="button">+ 加一个电脑</button>
+        <button id="beginBtn" class="primary-btn" type="button">开始游戏</button>
+      </div>
+      <p id="lobbyStatus" class="hint"></p>
+    </div>
+  </section>
   <section id="game" class="screen" hidden>
     <div class="board">
       <div class="opponents" id="opponents"></div>
@@ -178,6 +213,8 @@
 
 <div id="toast" class="toast" aria-live="polite"></div>
 
+<script src="./mqtt.min.js" defer></script>
 <script src="./app.js" defer></script>
+<script src="./net.js" defer></script>
 </body>
 </html>
