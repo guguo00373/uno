@@ -60,7 +60,6 @@
         <span class="setup-label">怎么玩</span>
         <div class="seg" id="modeSeg" role="group" aria-label="玩法">
           <button type="button" class="seg-btn is-active" data-mode="bot">人机对战</button>
-          <button type="button" class="seg-btn" data-mode="local">同桌轮流</button>
           <button type="button" class="seg-btn" data-mode="net">联机对战</button>
         </div>
       </div>
@@ -77,7 +76,7 @@
           <button id="joinRoomBtn" class="ghost-btn" type="button">加入房间</button>
         </div>
       </div>
-      <p class="hint">人机对战：你和电脑轮流出牌。同桌轮流：一台设备，大家轮着上手。联机对战：建个房间，把链接发给朋友，各用各的手机一起打。</p>
+      <p class="hint">人机对战：你和电脑轮流出牌。联机对战：建个房间，把链接发给朋友，各用各的手机一起打。</p>
     </div>
 
     <section id="rules" class="rules">
@@ -137,6 +136,7 @@
       <div class="lobby-players" id="lobbyPlayers"></div>
       <div class="lobby-actions">
         <button id="addBotBtn" class="ghost-btn" type="button">+ 加一个电脑</button>
+        <button id="removeBotBtn" class="ghost-btn" type="button">− 减一个电脑</button>
         <button id="beginBtn" class="primary-btn" type="button">开始游戏</button>
       </div>
       <p id="lobbyStatus" class="hint"></p>
