@@ -25,7 +25,7 @@
     started: false,
     lastPub: 0,
     brokerIndex: 0,
-    hostSeen: 0,
+    hostSeen: 0, confirmKick: null,
     pollTimer: null,
     hbTimer: null,
     pending: []
@@ -275,6 +275,12 @@
     }
     // 私有话题
     if (msg.t === "hand") { applyHand(msg); return; }
+    if (msg.t === "kick") {
+      API.toast(msg.why || "你被请出了房间");
+      net.started = false;
+      leave(true);
+      return;
+    }
     if (msg.t === "deny") {
       API.toast("无法加入：" + (msg.why || "房间不可用"));
       net.started = false;
@@ -363,6 +369,15 @@
     publishState();
   }
 
+  function kickPlayer(id, name) {
+    if (net.role !== "host") return;
+    if (id === net.myId) return;
+    publish(privTopic(id), { t: "kick", why: "房主把你请出了房间" });
+    net.roster = net.roster.filter(function (p) { return p.id !== id; });
+    publishRoster();
+    renderLobby();
+    API.toast("已把 " + (name || "对方") + " 请出房间");
+  }
   function removeBot(botId) {
     if (net.role !== "host" || net.started) return;
     var idx = -1;
@@ -426,10 +441,27 @@
       tag.className = "lobby-tag";
       tag.textContent = p.bot ? "电脑" : (p.id === net.myId ? "你" : (i === 0 ? "房主" : "玩家"));
       row.appendChild(av); row.appendChild(nm); row.appendChild(tag);
-      if (p.bot && net.role === "host") {
+      if (net.role === "host" && p.id !== net.myId) {
+        var confirming = !p.bot && net.confirmKick && net.confirmKick.id === p.id && now() < net.confirmKick.until;
         var del = document.createElement("button");
-        del.type = "button"; del.className = "lobby-del"; del.textContent = "\u00d7"; del.title = "移除这个电脑";
-        del.addEventListener("click", function () { removeBot(p.id); });
+        del.type = "button";
+        del.className = "lobby-del" + (confirming ? " confirm" : "");
+        del.textContent = confirming ? "踢出?" : "\u00d7";
+        del.title = p.bot ? "移除这个电脑" : "把 TA 踢出房间";
+        del.addEventListener("click", function () {
+          if (p.bot) { removeBot(p.id); return; }
+          var hot = net.confirmKick && net.confirmKick.id === p.id && now() < net.confirmKick.until;
+          if (!hot) {
+            net.confirmKick = { id: p.id, until: now() + 3000 };
+            renderLobby();
+            setTimeout(function () {
+              if (net.confirmKick && net.confirmKick.id === p.id && now() >= net.confirmKick.until) { net.confirmKick = null; renderLobby(); }
+            }, 3100);
+            return;
+          }
+          net.confirmKick = null;
+          kickPlayer(p.id, p.name);
+        });
         row.appendChild(del);
       }
       host.appendChild(row);
@@ -446,7 +478,8 @@
       var botCount = net.roster.filter(function (p) { return p.bot; }).length;
       if (el.removeBotBtn) el.removeBotBtn.disabled = botCount === 0;
       if (el.addBotBtn) el.addBotBtn.disabled = net.roster.length >= (S.count || 4);
-      setStatus(net.roster.length + " / " + (S.count || 4) + " 人已就位，可以开始了");
+      var guests = net.roster.filter(function (p) { return p.id !== net.myId; }).length;
+      setStatus(net.roster.length + " / " + (S.count || 4) + " 人已就位，可以开始了" + (guests ? "（点玩家右边的 × 可以把 TA 请出去）" : ""));
     }
   }
 
