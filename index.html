@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>UNO纸牌 · 一桌人，一副牌</title>
+<meta name="description" content="UNO纸牌：一台设备就能开局，人机对战或同桌轮流，经典 UNO 规则。" />
+<meta name="theme-color" content="#f6f1e6" />
+<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">U</span>
+    <span class="brand-text">
+      <strong>UNO纸牌</strong>
+      <small>一桌人，一副牌</small>
+    </span>
+  </div>
+  <nav class="topnav">
+    <a href="#play">开一局</a>
+    <a href="#rules">玩法手册</a>
+  </nav>
+  <button id="soundToggle" class="icon-btn" type="button" aria-pressed="true" title="音效开关">🔊</button>
+</header>
+
+<main>
+  <section id="home" class="screen">
+    <div class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">今天，玩点什么？</p>
+        <h1>UNO<span>纸牌</span></h1>
+        <p class="lede">颜色相同，或者数字对上，就能打出去。<br />谁先出完手里的牌，谁就赢下这一局。</p>
+        <div class="hero-actions">
+          <a class="primary-btn" href="#play">开始一局</a>
+          <a class="ghost-btn" href="#rules">先看玩法</a>
+        </div>
+      </div>
+      <div class="hero-fan" aria-hidden="true">
+        <div class="mini-card c-red"><span>7</span></div>
+        <div class="mini-card c-blue"><span>&#8635;</span></div>
+        <div class="mini-card c-green"><span>+2</span></div>
+        <div class="mini-card c-yellow"><span>3</span></div>
+        <div class="mini-card c-wild"><span>+4</span></div>
+      </div>
+    </div>
+
+    <div id="play" class="panel setup">
+      <h2>开一局</h2>
+      <div class="setup-row">
+        <span class="setup-label">人数</span>
+        <div class="seg" id="countSeg" role="group" aria-label="人数">
+          <button type="button" class="seg-btn" data-count="2">2 人</button>
+          <button type="button" class="seg-btn" data-count="3">3 人</button>
+          <button type="button" class="seg-btn is-active" data-count="4">4 人</button>
+        </div>
+      </div>
+      <div class="setup-row">
+        <span class="setup-label">对手</span>
+        <div class="seg" id="modeSeg" role="group" aria-label="对手">
+          <button type="button" class="seg-btn is-active" data-mode="bot">人机对战</button>
+          <button type="button" class="seg-btn" data-mode="local">同桌轮流</button>
+        </div>
+      </div>
+      <button id="startBtn" class="primary-btn wide" type="button">开始游戏</button>
+      <p class="hint">人机对战：你和电脑轮流出牌。同桌轮流：一台设备，大家轮着上手。</p>
+    </div>
+
+    <section id="rules" class="rules">
+      <div class="section-head">
+        <h2>玩法手册</h2>
+        <p>两分钟看完，马上能上手。</p>
+      </div>
+      <div class="rule-grid">
+        <article class="rule">
+          <div class="rule-icon">&#127919;</div>
+          <h3>目标</h3>
+          <p>想办法先把自己手里的牌全部出完。第一个出完的人赢下这一局。</p>
+        </article>
+        <article class="rule">
+          <div class="rule-icon">&#127183;</div>
+          <h3>怎么出牌</h3>
+          <p>打出的牌要和牌堆顶的牌「颜色相同」或「数字 / 符号相同」。实在没有能打的，就抽一张。</p>
+        </article>
+        <article class="rule">
+          <div class="rule-icon">&#9193;</div>
+          <h3>功能牌</h3>
+          <p>跳过：下家停一轮。反转：换出牌方向。+2：下家抽两张并停一轮。</p>
+        </article>
+        <article class="rule">
+          <div class="rule-icon">&#127912;</div>
+          <h3>变色牌</h3>
+          <p>变色牌随时能打，打出后由你指定下一种颜色。+4 变色牌让下家抽四张并停一轮。</p>
+        </article>
+        <article class="rule">
+          <div class="rule-icon">&#128227;</div>
+          <h3>记得喊 UNO</h3>
+          <p>手里只剩最后一张牌时，要在 5 秒内按下 UNO 按钮，否则要罚抽两张牌。</p>
+        </article>
+        <article class="rule">
+          <div class="rule-icon">&#127942;</div>
+          <h3>记分</h3>
+          <p>赢家按其他玩家手里剩下的牌计分，数字牌按面值、功能牌算 20 分。玩得越多，分越高。</p>
+        </article>
+      </div>
+    </section>
+  </section>
+
+  <section id="game" class="screen" hidden>
+    <div class="board">
+      <div class="opponents" id="opponents"></div>
+
+      <div class="table">
+        <div class="table-meta">
+          <span id="dirBadge" class="badge">顺时针</span>
+          <span id="colorBadge" class="badge color-badge"></span>
+          <span id="roundBadge" class="badge">第 1 局</span>
+        </div>
+        <div class="piles">
+          <button id="drawPile" class="draw-pile" type="button" aria-label="从牌堆抽一张">
+            <span class="draw-face">UNO</span>
+            <span class="pile-count" id="deckCount">0</span>
+          </button>
+          <div id="discardPile" class="discard-pile"></div>
+        </div>
+        <div id="turnBanner" class="turn-banner"></div>
+        <div id="log" class="log" aria-live="polite"></div>
+      </div>
+
+      <div class="my-area">
+        <div class="my-head">
+          <span class="my-name">你</span>
+          <span id="myCount" class="my-count">7 张</span>
+        </div>
+        <div id="myHand" class="my-hand"></div>
+      </div>
+    </div>
+
+    <div class="game-bar">
+      <button id="unoBtn" class="uno-btn" type="button" disabled>UNO!</button>
+      <button id="passBtn" class="ghost-btn" type="button" hidden>过牌</button>
+      <button id="quitBtn" class="ghost-btn" type="button">退出本局</button>
+      <span id="scoreLine" class="score-line"></span>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <span>&#10022; UNO纸牌</span>
+  <p>输赢留在这一局，快乐带到下一局。</p>
+  <small>一台设备就能开局 · 手机电脑都能玩</small>
+</footer>
+
+<div id="colorPicker" class="overlay" hidden>
+  <div class="modal">
+    <h3>选一个颜色</h3>
+    <div class="color-choices">
+      <button type="button" class="color-choice c-red" data-color="red" aria-label="红色"></button>
+      <button type="button" class="color-choice c-yellow" data-color="yellow" aria-label="黄色"></button>
+      <button type="button" class="color-choice c-green" data-color="green" aria-label="绿色"></button>
+      <button type="button" class="color-choice c-blue" data-color="blue" aria-label="蓝色"></button>
+    </div>
+  </div>
+</div>
+
+<div id="resultOverlay" class="overlay" hidden>
+  <div class="modal result">
+    <div class="result-emoji" id="resultEmoji">&#127881;</div>
+    <h3 id="resultTitle">这局赢啦</h3>
+    <p id="resultDetail"></p>
+    <div class="result-actions">
+      <button id="againBtn" class="primary-btn" type="button">再来一局</button>
+      <button id="homeBtn" class="ghost-btn" type="button">回到首页</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<script src="./app.js" defer></script>
+</body>
+</html>
