@@ -422,3 +422,14 @@ button{font-family:inherit}
 }
 .lobby-del:hover{background:var(--red);color:#fff}
 .ghost-btn:disabled,.primary-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+/* ---------- 卡哇伊头像 ---------- */
+.avatar{display:block;object-fit:contain;background:#f4ecdc;border-radius:50%;flex:0 0 auto}
+.opponent-head .who{display:flex;align-items:center;gap:8px;min-width:0}
+.opponent-head .avatar{width:30px;height:30px}
+.opponent-head .who-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.my-head .avatar.mine{width:34px;height:34px;margin-right:8px}
+.my-head .my-name{margin-right:auto}
+.lobby-av{width:42px;height:42px}
+.lobby-av.mine{cursor:pointer;box-shadow:0 0 0 2.5px var(--red);transition:transform .15s ease}
+.lobby-av.mine:hover{transform:scale(1.08)}
+.av-placeholder{width:42px;height:42px;border-radius:50%;border:2px dashed #d9ceb6;flex:0 0 auto}
