@@ -46,6 +46,15 @@
   function pubTopic() { return PREFIX + net.room + "/pub"; }
   function privTopic(id) { return PREFIX + net.room + "/p/" + id; }
   function now() { return Date.now(); }
+  var AV = API.AVATARS || ["cat"];
+  function avatarName(i) { var k = AV.length; var n = Math.floor(Number(i) || 0) % k; return AV[n < 0 ? n + k : n]; }
+  function savedAvatar() { try { var v = localStorage.getItem("uno-avatar"); return v == null ? 0 : Number(v); } catch (e) { return 0; } }
+  function firstFreeAvatar() {
+    var used = {};
+    net.roster.forEach(function (p) { if (p.avatar != null) used[p.avatar] = 1; });
+    for (var i = 0; i < AV.length; i++) if (!used[i]) return i;
+    return Math.floor(Math.random() * AV.length);
+  }
 
   // ---------- 连接 ----------
   function connect(onReady) {
@@ -90,7 +99,8 @@
     net.myId = randId();
     net.myName = name || "房主";
     net.room = randCode();
-    net.roster = [{ id: net.myId, name: net.myName, bot: false }];
+    net.roster = [{ id: net.myId, name: net.myName, bot: false, avatar: savedAvatar() }];
+    net.myAvatar = net.roster[0].avatar;
     net.mySeat = 0;
     connect(function () {
       sub(pubTopic());
@@ -108,14 +118,15 @@
     connect(function () {
       sub(pubTopic());
       sub(privTopic(net.myId));
-      publish(pubTopic(), { t: "join", id: net.myId, name: net.myName });
+      net.myAvatar = savedAvatar();
+      publish(pubTopic(), { t: "join", id: net.myId, name: net.myName, avatar: net.myAvatar });
       startHeartbeat();
       showLobby();
       var n = 0;
       var timer = setInterval(function () {
         if (net.started || net.role !== "guest") { clearInterval(timer); return; }
         if (++n > 20) { clearInterval(timer); setStatus("找不到这个房间，检查一下房间号？"); return; }
-        publish(pubTopic(), { t: "join", id: net.myId, name: net.myName });
+        publish(pubTopic(), { t: "join", id: net.myId, name: net.myName, avatar: net.myAvatar });
       }, 1500);
     });
   }
@@ -135,7 +146,7 @@
         if (!net.started) publishRoster();
         else publishState();
       } else {
-        if (!net.started) publish(pubTopic(), { t: "join", id: net.myId, name: net.myName });
+        if (!net.started) publish(pubTopic(), { t: "join", id: net.myId, name: net.myName, avatar: net.myAvatar });
         else if (now() - net.hostSeen > 3500) publish(pubTopic(), { t: "sync", id: net.myId });
         if (net.started && now() - net.hostSeen > 20000) setStatus("房主好像掉线了…");
       }
@@ -178,7 +189,9 @@
         if (net.started) { publish(privTopic(msg.id), { t: "deny", why: "游戏已经开始了" }); return; }
         if (net.roster.length >= (S.count || 4)) { publish(privTopic(msg.id), { t: "deny", why: "房间满了" }); return; }
         if (!net.roster.some(function (p) { return p.id === msg.id; })) {
-          net.roster.push({ id: msg.id, name: (msg.name || "玩家").slice(0, 10), bot: false });
+          var want = (msg.avatar == null) ? -1 : Number(msg.avatar);
+          var taken = net.roster.some(function (p) { return p.avatar === want; });
+          net.roster.push({ id: msg.id, name: (msg.name || "玩家").slice(0, 10), bot: false, avatar: (want >= 0 && !taken) ? want : firstFreeAvatar() });
           API.toast((msg.name || "玩家") + " 加入了房间");
         } else {
           net.roster.forEach(function (p) { if (p.id === msg.id) p.name = (msg.name || p.name).slice(0, 10); });
@@ -205,6 +218,11 @@
         if (net.role !== "guest") return;
         net.started = true;
         applyPublic(msg);
+        return;
+      }
+      if (msg.t === "profile" && net.role === "host") {
+        net.roster.forEach(function (p) { if (p.id === msg.id && !p.bot && msg.avatar != null) p.avatar = Number(msg.avatar); });
+        publishRoster();
         return;
       }
       if (msg.t === "sync" && net.role === "host") {
@@ -307,7 +325,7 @@
     S.role = "host";
     S.count = net.roster.length;
     S.seat = 0;
-    S.roster = net.roster.map(function (p) { return { name: p.name, bot: !!p.bot }; });
+    S.roster = net.roster.map(function (p) { return { name: p.name, bot: !!p.bot, avatar: p.avatar }; });
     publishRoster();
     API.startGame(false);
     switchToGame();
@@ -334,7 +352,7 @@
     if (net.roster.length >= (S.count || 4)) { API.toast("人数已经满了"); return; }
     var names = ["电脑 A", "电脑 B", "电脑 C"];
     var used = net.roster.filter(function (p) { return p.bot; }).length;
-    net.roster.push({ id: "bot_" + randId(), name: names[used] || ("电脑 " + (used + 1)), bot: true });
+    net.roster.push({ id: "bot_" + randId(), name: names[used] || ("电脑 " + (used + 1)), bot: true, avatar: firstFreeAvatar() });
     publishRoster();
     renderLobby();
   }
@@ -361,16 +379,22 @@
     net.roster.forEach(function (p, i) {
       var row = document.createElement("div");
       row.className = "lobby-player";
-      var dot = document.createElement("span");
-      dot.className = "seat-dot";
-      dot.textContent = i + 1;
+      var av = document.createElement("img");
+      av.className = "avatar lobby-av";
+      av.alt = "";
+      av.src = "./avatars/" + avatarName(p.avatar) + ".svg";
+      if (p.id === net.myId) {
+        av.classList.add("mine");
+        av.title = "点我换头像";
+        av.addEventListener("click", cycleMyAvatar);
+      }
       var nm = document.createElement("span");
       nm.className = "lobby-name";
-      nm.textContent = p.name + (p.id === net.myId ? "（你）" : "");
+      nm.textContent = p.name;
       var tag = document.createElement("span");
       tag.className = "lobby-tag";
-      tag.textContent = p.bot ? "电脑" : (i === 0 ? "房主" : "玩家");
-      row.appendChild(dot); row.appendChild(nm); row.appendChild(tag);
+      tag.textContent = p.bot ? "电脑" : (p.id === net.myId ? "你" : (i === 0 ? "房主" : "玩家"));
+      row.appendChild(av); row.appendChild(nm); row.appendChild(tag);
       if (p.bot && net.role === "host") {
         var del = document.createElement("button");
         del.type = "button"; del.className = "lobby-del"; del.textContent = "\u00d7"; del.title = "移除这个电脑";
@@ -382,7 +406,7 @@
     for (var k = net.roster.length; k < (S.count || 4); k++) {
       var empty = document.createElement("div");
       empty.className = "lobby-player empty";
-      var d2 = document.createElement("span"); d2.className = "seat-dot"; d2.textContent = k + 1;
+      var d2 = document.createElement("span"); d2.className = "av-placeholder";
       var t2 = document.createElement("span"); t2.className = "lobby-name"; t2.textContent = "等待加入…";
       empty.appendChild(d2); empty.appendChild(t2);
       host.appendChild(empty);
@@ -411,6 +435,21 @@
     el.againBtn.hidden = true;
   }
 
+  function cycleMyAvatar() {
+    var me = null;
+    net.roster.forEach(function (p) { if (p.id === net.myId) me = p; });
+    if (!me) return;
+    var used = {};
+    net.roster.forEach(function (p) { if (p.id !== net.myId && p.avatar != null) used[p.avatar] = 1; });
+    var next = (Number(me.avatar) || 0);
+    for (var k = 1; k <= AV.length; k++) { var cand = (next + k) % AV.length; if (!used[cand]) { next = cand; break; } }
+    me.avatar = next;
+    net.myAvatar = me.avatar;
+    try { localStorage.setItem("uno-avatar", String(me.avatar)); } catch (e) {}
+    if (net.role === "host") publishRoster();
+    else publish(pubTopic(), { t: "profile", id: net.myId, avatar: me.avatar });
+    renderLobby();
+  }
   function setStatus(text) { if (el.lobbyStatus) el.lobbyStatus.textContent = text; }
 
   function leave(silent) {
