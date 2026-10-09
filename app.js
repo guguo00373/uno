@@ -114,7 +114,7 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], revealed: true,
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true,
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 780
   };
 
@@ -200,7 +200,13 @@
       for (var k = 0; k < show; k++) hand.appendChild(cardBackEl());
       box.appendChild(head);
       box.appendChild(hand);
-      if (p.hand.length === 1) {
+      if (state.exposed[i] && !state.over) {
+        var cb = document.createElement("button");
+        cb.type = "button"; cb.className = "catch-btn";
+        cb.textContent = "\uD83D\uDC40 举报 " + p.name + " 没喊 UNO";
+        cb.addEventListener("click", function () { catchUno(i); });
+        box.appendChild(cb);
+      } else if (p.hand.length === 1) {
         var tag = document.createElement("span");
         tag.className = "opponent-said-uno";
         tag.textContent = "UNO!";
@@ -236,12 +242,10 @@
     } else if (isBot(state.turn)) {
       banner.textContent = cur().name + " 正在想…";
       banner.classList.remove("hot");
-    } else if (state.mode === "local") {
-      banner.textContent = "轮到 " + cur().name;
-      banner.classList.add("hot");
     } else {
-      banner.textContent = "轮到你出牌";
-      banner.classList.add("hot");
+      var myTurn = state.mode === "net" ? (state.turn === state.seat) : (state.turn === 0);
+      banner.textContent = myTurn ? "轮到你出牌" : ("轮到 " + cur().name + " 出牌");
+      banner.classList.toggle("hot", myTurn);
     }
   }
 
@@ -297,13 +301,13 @@
     var uno = els.unoBtn;
     var idx = bottomIndex();
     var p = state.players[idx];
-    var humanTurn = p && isHuman(idx) && idx === state.turn && !state.over;
-    var armed = state.graceTimer && state.graceLeft > 0 && idx === state.turn;
-    uno.disabled = !(humanTurn && p.hand.length <= 2);
-    uno.classList.toggle("armed", !!armed);
-    if (armed) uno.textContent = "UNO! " + state.graceLeft;
-    else uno.textContent = "UNO!";
-    els.passBtn.hidden = !(state.canPass && humanTurn);
+    var mine = p && isHuman(idx) && !state.over;
+    if (state.graceTimer) { clearInterval(state.graceTimer); state.graceTimer = null; }
+    var canUno = mine && p.hand.length <= 2 && !state.unoCalled[idx];
+    uno.disabled = !canUno;
+    uno.classList.toggle("armed", !!canUno && p.hand.length === 1);
+    uno.textContent = "UNO!";
+    els.passBtn.hidden = !(state.canPass && mine && idx === state.turn);
     els.scoreLine.textContent = state.scores.map(function (s, i) {
       return state.players[i].name + " " + s + " 分";
     }).join(" · ");
@@ -364,7 +368,8 @@
         state.unoCalled[pi] = true;
         log(p.name + "：UNO！");
       } else {
-        startGrace(pi);
+        state.exposed[pi] = true;
+        log(p.name + " 只剩最后一张，还没喊 UNO");
       }
     }
     if (p.hand.length === 0) { finish(pi); return; }
@@ -528,16 +533,15 @@
   }
 
   function callUno() {
-    var pi = state.turn;
+    var pi = bottomIndex();
     if (state.over) return;
     if (!isHuman(pi)) return;
     var p = state.players[pi];
     if (p.hand.length > 2) { toast("牌还多着呢"); return; }
     if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") { window.__UNO_API__.netAction({ type: "uno" }); return; }
     state.unoCalled[pi] = true;
-    clearInterval(state.graceTimer);
-    state.graceTimer = null;
-    state.graceLeft = 0;
+    state.exposed[pi] = false;
+    if (state.graceTimer) { clearInterval(state.graceTimer); state.graceTimer = null; }
     SFX.uno();
     toast("UNO！");
     log(p.name + " 喊了 UNO！");
@@ -571,12 +575,32 @@
     var p = state.players[seat];
     if (!p || p.hand.length > 2) return;
     state.unoCalled[seat] = true;
-    clearInterval(state.graceTimer);
-    state.graceTimer = null;
-    state.graceLeft = 0;
+    state.exposed[seat] = false;
+    if (state.graceTimer) { clearInterval(state.graceTimer); state.graceTimer = null; }
     SFX.uno();
     log(p.name + " 喊了 UNO！");
     render();
+  }
+  function catchUnoFor(catcher, target) {
+    if (state.over) return;
+    if (!state.players[target]) return;
+    if (!state.exposed[target] || state.unoCalled[target]) return;
+    state.exposed[target] = false;
+    if (state.players[target].hand.length !== 1) { render(); return; }
+    drawTo(state.players[target], 2);
+    var cn = state.players[catcher] ? state.players[catcher].name : "有人";
+    log(cn + " 抓到 " + state.players[target].name + " 没喊 UNO，罚抽 2 张");
+    toast(cn + " 抓到 " + state.players[target].name + " 没喊 UNO！罚抽 2 张");
+    SFX.nope();
+    render();
+  }
+  function catchUno(target) {
+    if (state.over) return;
+    if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") {
+      window.__UNO_API__.netAction({ type: "catch", target: target });
+      return;
+    }
+    catchUnoFor(state.seat || 0, target);
   }
 
   // ---------------- 结束 ----------------
@@ -644,6 +668,7 @@
     state.over = false;
     state.canPass = false;
     state.unoCalled = players.map(function () { return false; });
+    state.exposed = players.map(function () { return false; });
     state.revealed = mode !== "local";
     state.busy = false;
     state.scores = prevScores;
@@ -788,6 +813,7 @@
     AVATARS: AVATARS,
     avatarName: avatarName,
     callUnoFor: callUnoFor,
+    catchUnoFor: catchUnoFor,
     humanDrawFor: drawForSeat,
     passFor: passForSeat,
     netAction: null,
