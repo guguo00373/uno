@@ -202,6 +202,8 @@
       discardTop: top ? { c: top.c, v: top.v, id: top.id } : null,
       over: !!S.over, winner: S.winnerIndex != null ? S.winnerIndex : null,
       exposed: (S.exposed || []).map(function (x) { return !!x; }),
+      challenge: S.challenge ? { by: S.challenge.by, victim: S.challenge.victim, prevColor: S.challenge.prevColor, in: Math.max(0, S.challenge.deadline - Date.now()) } : null,
+      reveal: S.reveal ? { seat: S.reveal.seat, guilty: !!S.reveal.guilty, cards: S.reveal.cards } : null,
       scores: S.scores.slice(), round: S.round
     };
   }
@@ -316,6 +318,8 @@
     S.turn = msg.turn;
     S.color = msg.color;
     S.exposed = (msg.exposed || []).map(function (x) { return !!x; });
+    S.challenge = msg.challenge ? { by: msg.challenge.by, victim: msg.challenge.victim, prevColor: msg.challenge.prevColor, deadline: Date.now() + (msg.challenge.in || 0) } : null;
+    S.reveal = msg.reveal ? { seat: msg.reveal.seat, guilty: !!msg.reveal.guilty, cards: msg.reveal.cards || [] } : null;
     S.over = !!msg.over;
     S.winnerIndex = msg.winner;
     var prevHand = (S.players[seat] && S.players[seat].hand) || [];
@@ -357,6 +361,11 @@
     }
     if (a.type === "catch") {
       API.catchUnoFor(seat, Number(a.target));
+      publishState();
+      return;
+    }
+    if (a.type === "challenge") {
+      if (S.challenge && Number(S.challenge.victim) === Number(seat)) API.respondChallenge(seat, !!a.yes);
       publishState();
       return;
     }
