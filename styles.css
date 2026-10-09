@@ -447,3 +447,10 @@ button{font-family:inherit}
   width:auto;padding:0 10px;border-radius:999px;background:var(--red);color:#fff;
   font-size:12px;font-weight:700;
 }
+/* 举报没喊 UNO */
+.catch-btn{
+  margin-top:9px;width:100%;border-radius:999px;padding:7px 10px;cursor:pointer;
+  background:#fff2d8;color:#a05f14;border:1px solid #f0d49a;font-size:12px;font-weight:700;
+  font-family:inherit;transition:all .12s ease;animation:pop .25s ease;
+}
+.catch-btn:hover{background:var(--red);color:#fff;border-color:var(--red)}
