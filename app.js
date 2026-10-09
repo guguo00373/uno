@@ -274,6 +274,10 @@
     if (state.over) {
       banner.textContent = "";
       banner.classList.remove("hot");
+    } else if (state.challenge) {
+      var cv = state.players[state.challenge.victim];
+      banner.textContent = "等待 " + (cv ? cv.name : "对方") + " 决定是否质疑 +4…";
+      banner.classList.remove("hot");
     } else if (isBot(state.turn)) {
       banner.textContent = cur().name + " 正在想…";
       banner.classList.remove("hot");
