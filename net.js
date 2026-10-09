@@ -130,7 +130,7 @@
     net.myId = randId();
     net.myName = name || "房主";
     net.room = randCode();
-    net.roster = [{ id: net.myId, name: net.myName, bot: false, avatar: savedAvatar() }];
+    net.roster = [{ id: net.myId, name: net.myName, bot: false, avatar: savedAvatar(), seen: now() }];
     net.myAvatar = net.roster[0].avatar;
     net.mySeat = 0;
     connect(function () {
@@ -174,7 +174,12 @@
     net.hbTimer = setInterval(function () {
       if (!net.connected) return;
       if (net.role === "host") {
-        if (!net.started) publishRoster();
+        if (!net.started) {
+          var before = net.roster.length;
+          net.roster = net.roster.filter(function (p) { return p.bot || p.id === net.myId || (now() - (p.seen || 0)) < 25000; });
+          if (net.roster.length !== before) { renderLobby(); API.toast("有人离开了房间"); }
+          publishRoster();
+        }
         else publishState();
       } else {
         if (!net.started) publish(pubTopic(), { t: "join", id: net.myId, name: net.myName, avatar: net.myAvatar });
@@ -217,16 +222,21 @@
     net.lastMsg = msg.t;
     if (topic === pubTopic()) {
       if (msg.t === "join" && net.role === "host") {
+        // 先判断是不是已经在房间里的人（心跳会反复发 join）
+        var known = null;
+        net.roster.forEach(function (p) { if (p.id === msg.id) known = p; });
+        if (known) {
+          known.seen = now();
+          var nn = (msg.name || "").slice(0, 10);
+          if (nn && nn !== known.name) { known.name = nn; publishRoster(); renderLobby(); }
+          return;
+        }
         if (net.started) { publish(privTopic(msg.id), { t: "deny", why: "游戏已经开始了" }); return; }
         if (net.roster.length >= (S.count || 4)) { publish(privTopic(msg.id), { t: "deny", why: "房间满了" }); return; }
-        if (!net.roster.some(function (p) { return p.id === msg.id; })) {
-          var want = (msg.avatar == null) ? -1 : Number(msg.avatar);
-          var taken = net.roster.some(function (p) { return p.avatar === want; });
-          net.roster.push({ id: msg.id, name: (msg.name || "玩家").slice(0, 10), bot: false, avatar: (want >= 0 && !taken) ? want : firstFreeAvatar() });
-          API.toast((msg.name || "玩家") + " 加入了房间");
-        } else {
-          net.roster.forEach(function (p) { if (p.id === msg.id) p.name = (msg.name || p.name).slice(0, 10); });
-        }
+        var want = (msg.avatar == null) ? -1 : Number(msg.avatar);
+        var taken = net.roster.some(function (p) { return p.avatar === want; });
+        net.roster.push({ id: msg.id, name: (msg.name || "玩家").slice(0, 10), bot: false, avatar: (want >= 0 && !taken) ? want : firstFreeAvatar(), seen: now() });
+        API.toast((msg.name || "玩家") + " 加入了房间");
         publishRoster();
         renderLobby();
         return;
@@ -250,6 +260,9 @@
         net.started = true;
         applyPublic(msg);
         return;
+      }
+      if (net.role === "host" && (msg.t === "act" || msg.t === "profile" || msg.t === "sync")) {
+        net.roster.forEach(function (p) { if (p.id === msg.id) p.seen = now(); });
       }
       if (msg.t === "profile" && net.role === "host") {
         net.roster.forEach(function (p) { if (p.id === msg.id && !p.bot && msg.avatar != null) p.avatar = Number(msg.avatar); });
@@ -398,7 +411,7 @@
     if (net.roster.length >= (S.count || 4)) { API.toast("人数已经满了"); return; }
     var names = ["电脑 A", "电脑 B", "电脑 C"];
     var used = net.roster.filter(function (p) { return p.bot; }).length;
-    net.roster.push({ id: "bot_" + randId(), name: names[used] || ("电脑 " + (used + 1)), bot: true, avatar: firstFreeAvatar() });
+    net.roster.push({ id: "bot_" + randId(), name: names[used] || ("电脑 " + (used + 1)), bot: true, avatar: firstFreeAvatar(), seen: now() });
     publishRoster();
     renderLobby();
   }
