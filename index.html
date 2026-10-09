@@ -67,8 +67,10 @@
         <button id="startBtn" class="primary-btn wide" type="button">开始游戏</button>
       </div>
       <div id="netRow" hidden>
-        <label class="field-label" for="nickInput">你的名字</label>
-        <input id="nickInput" class="text-input" type="text" maxlength="10" placeholder="例如：小明" />
+        <label class="field-label" for="nickInput">你的名字（点下面的随机名，或者自己打）</label>
+        <input id="nickInput" class="text-input" type="text" maxlength="10" placeholder="例如：摸鱼大师" />
+        <div class="name-chips" id="nameChips"></div>
+        <button id="shuffleNamesBtn" class="ghost-btn tiny" type="button">🎲 换一批名字</button>
         <button id="createRoomBtn" class="primary-btn wide" type="button">创建房间（拿链接）</button>
         <label class="field-label" for="roomInput">已经拿到房间号？</label>
         <div class="join-row">
