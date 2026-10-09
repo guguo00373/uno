@@ -442,3 +442,8 @@ button{font-family:inherit}
 .name-chip:hover{background:#fff3d6;border-color:#efd08a;transform:translateY(-1px)}
 .name-chip.is-on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .ghost-btn.tiny{padding:8px 16px;font-size:13px;margin-bottom:14px}
+/* 踢人二次确认 */
+.lobby-del.confirm{
+  width:auto;padding:0 10px;border-radius:999px;background:var(--red);color:#fff;
+  font-size:12px;font-weight:700;
+}
