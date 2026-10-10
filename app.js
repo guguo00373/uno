@@ -114,7 +114,7 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null,
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false,
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 1150
   };
 
@@ -356,6 +356,7 @@
     uno.classList.toggle("armed", !!canUno && p.hand.length === 1);
     uno.textContent = "UNO!";
     els.passBtn.hidden = !(state.canPass && mine && idx === state.turn);
+    if (els.autoBtn) els.autoBtn.classList.toggle("is-on", !!state.autoPlay);
     els.scoreLine.textContent = state.scores.map(function (s, i) {
       return state.players[i].name + " " + s + " 分";
     }).join(" · ");
@@ -502,11 +503,27 @@
     if (state.mode === "local") state.revealed = isBot(state.turn);
     render();
     maybeScheduleBot();
+    maybeAutoPlay();
   }
 
   function botJitter(base) {
     var b = base || 1100;
     return Math.round(b + Math.random() * b * 0.9);
+  }
+  function mySeat() { return state.mode === "net" ? (state.seat || 0) : 0; }
+  function maybeAutoPlay() {
+    clearTimeout(state.autoTimer);
+    if (!state.autoPlay || state.over || state.challenge || state.busy) return;
+    var me = mySeat();
+    if (state.turn !== me || isBot(me)) return;
+    if (!state.players[me]) return;
+    state.busy = true;
+    render();
+    state.autoTimer = setTimeout(function () {
+      if (!state.autoPlay || state.over || state.challenge || state.turn !== me) { state.busy = false; render(); return; }
+      state.busy = false;
+      aiMove(me);
+    }, botJitter(state.botDelay));
   }
   function maybeScheduleBot() {
     clearTimeout(state.timer);
@@ -717,6 +734,14 @@
     if (!m) return null;
     try { return JSON.parse(m[0]); } catch (e) { return null; }
   }
+  function refreshAiHome() {
+    var box = document.getElementById("aiHomeStatus");
+    if (!box) return;
+    var c = getAiConfig();
+    box.textContent = c.key
+      ? ("✓ 已配置：" + (c.model || "未填模型") + "（点右边的按钮可以改）")
+      : "还没配置 AI —— 点右边填一下 API Key，就能和它打牌了";
+  }
   function aiSay(text, name) {
     if (!text) return;
     var api = window.__UNO_API__;
@@ -726,6 +751,18 @@
     if (!act || state.over || state.turn !== seat || state.challenge) return false;
     var p = state.players[seat];
     if (!p) return false;
+    var api = window.__UNO_API__;
+    var isMe = (state.mode === "net") ? (Number(seat) === Number(state.seat)) : (Number(seat) === 0);
+    if (api && api.netAction && state.role === "guest" && isMe) {
+      if (act.action === "draw") { api.netAction({ type: "draw" }); return true; }
+      if (act.action === "play") {
+        var gc = p.hand.filter(function (c) { return String(c.id) === String(act.id); })[0];
+        if (!gc || !canPlay(gc)) return false;
+        api.netAction({ type: "play", id: gc.id, color: gc.c === "wild" ? (act.color || bestColor(seat, gc)) : null });
+        return true;
+      }
+      return false;
+    }
     if (act.action === "draw") {
       var drew = drawForSeat(seat);
       if (!drew) return false;
@@ -821,6 +858,7 @@
     if (state.over) return;
     var p = state.players[seat];
     if (!p || p.hand.length > 2) return;
+    if (state.unoCalled[seat] && !state.exposed[seat]) return;
     state.unoCalled[seat] = true;
     state.exposed[seat] = false;
     if (state.graceTimer) { clearInterval(state.graceTimer); state.graceTimer = null; }
@@ -898,9 +936,11 @@
       ? roster.map(function (r) { return r.name; })
       : (mode === "bot"
         ? ["你", "电脑 A", "电脑 B", "电脑 C"]
-        : ["玩家 1", "玩家 2", "玩家 3", "玩家 4"]);
+        : (mode === "ai"
+          ? ["你", "AI 小智", "AI 阿丙", "AI 老王"]
+          : ["玩家 1", "玩家 2", "玩家 3", "玩家 4"]));
     var players = [];
-    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "bot" && i !== 0), avatar: roster && roster[i] && roster[i].avatar != null ? roster[i].avatar : i, ai: roster && roster[i] ? !!roster[i].ai : false });
+    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "ai" ? i !== 0 : (mode === "bot" && i !== 0)), avatar: roster && roster[i] && roster[i].avatar != null ? roster[i].avatar : i, ai: roster && roster[i] ? !!roster[i].ai : (mode === "ai" && i !== 0) });
 
     // 发牌
     for (var r = 0; r < 7; r++) {
@@ -951,6 +991,7 @@
     log("开局！起手牌：" + cardLabel(first) + " · " + COLOR_CN[first.c]);
     render();
     maybeScheduleBot();
+    maybeAutoPlay();
   }
 
   function goHome() {
@@ -980,6 +1021,7 @@
     els.myName = document.querySelector(".my-name");
     els.myCount = $("myCount");
     els.unoBtn = $("unoBtn");
+    els.autoBtn = $("autoBtn");
     els.passBtn = $("passBtn");
     els.scoreLine = $("scoreLine");
     els.colorPicker = $("colorPicker");
@@ -1016,10 +1058,12 @@
       this.querySelectorAll(".seg-btn").forEach(function (x) { x.classList.remove("is-active"); });
       b.classList.add("is-active");
       var isNet = state.mode === "net";
-      var netRow = $("netRow"), soloRow = $("soloRow");
+      var netRow = $("netRow"), soloRow = $("soloRow"), aiRow = $("aiRow");
       if (netRow) netRow.hidden = !isNet;
       if (soloRow) soloRow.hidden = isNet;
-      $("startBtn").textContent = state.mode === "bot" ? "开始游戏" : "开一局（轮流上手）";
+      if (aiRow) aiRow.hidden = state.mode !== "ai";
+      if (state.mode === "ai") refreshAiHome();
+      $("startBtn").textContent = state.mode === "ai" ? "开始跟 AI 打" : (state.mode === "bot" ? "开始游戏" : "开一局（轮流上手）");
     });
 
     $("startBtn").addEventListener("click", function () { startGame(false); });
@@ -1046,6 +1090,13 @@
       passTurn(pi, 1);
     });
     els.unoBtn.addEventListener("click", callUno);
+    if (els.autoBtn) els.autoBtn.addEventListener("click", function () {
+      state.autoPlay = !state.autoPlay;
+      try { localStorage.setItem("uno-autoplay", state.autoPlay ? "1" : "0"); } catch (e) {}
+      toast(state.autoPlay ? "AI 托管已开启，它会替你出牌" : "AI 托管已关闭");
+      render();
+      if (state.autoPlay) maybeAutoPlay();
+    });
 
     els.colorPicker.addEventListener("click", function (e) {
       var b = e.target.closest(".color-choice"); if (!b) return;
@@ -1064,12 +1115,23 @@
       if (soundOn) SFX.click();
     });
 
+    setInterval(function () {
+      if (!state.autoPlay || state.over) return;
+      var me = mySeat();
+      var p = state.players[me];
+      if (!p || isBot(me)) return;
+      if (p.hand.length <= 2 && !state.unoCalled[me]) {
+        if (window.__UNO_API__ && window.__UNO_API__.netAction && state.role === "guest") window.__UNO_API__.netAction({ type: "uno" });
+        else callUnoFor(me);
+      }
+    }, 1500);
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { els.colorPicker.hidden = true; pendingWild = null; }
       if (e.key.toLowerCase() === "u") callUno();
     });
   }
 
+  try { if (localStorage.getItem("uno-autoplay") === "1") state.autoPlay = true; } catch (e) {}
   bind();
   render();
 
@@ -1087,6 +1149,7 @@
     cardFaceEl: cardFaceEl,
     AVATARS: AVATARS,
     avatarName: avatarName,
+    refreshAiHome: refreshAiHome,
     callUnoFor: callUnoFor,
     catchUnoFor: catchUnoFor,
     chatSay: null,
@@ -1101,4 +1164,5 @@
   };
   els.home.hidden = false;
   els.game.hidden = true;
+  refreshAiHome();
 })();
