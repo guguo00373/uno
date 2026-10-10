@@ -214,6 +214,7 @@
       discardTop: top ? { c: top.c, v: top.v, id: top.id } : null,
       over: !!S.over, winner: S.winnerIndex != null ? S.winnerIndex : null,
       exposed: (S.exposed || []).map(function (x) { return !!x; }),
+      unoCalled: (S.unoCalled || []).map(function (x) { return !!x; }),
       challenge: S.challenge ? { by: S.challenge.by, victim: S.challenge.victim, prevColor: S.challenge.prevColor, in: Math.max(0, S.challenge.deadline - Date.now()) } : null,
       reveal: S.reveal ? { seat: S.reveal.seat, guilty: !!S.reveal.guilty, cards: S.reveal.cards } : null,
       scores: S.scores.slice(), round: S.round
@@ -344,6 +345,7 @@
     S.turn = msg.turn;
     S.color = msg.color;
     S.exposed = (msg.exposed || []).map(function (x) { return !!x; });
+    S.unoCalled = (msg.unoCalled || []).map(function (x) { return !!x; });
     S.challenge = msg.challenge ? { by: msg.challenge.by, victim: msg.challenge.victim, prevColor: msg.challenge.prevColor, deadline: Date.now() + (msg.challenge.in || 0) } : null;
     S.reveal = msg.reveal ? { seat: msg.reveal.seat, guilty: !!msg.reveal.guilty, cards: msg.reveal.cards || [] } : null;
     S.over = !!msg.over;
@@ -436,7 +438,7 @@
   function addAi() {
     if (net.role !== "host" || net.started) return;
     if (net.roster.length >= (S.count || 4)) { API.toast("人数已经满了"); return; }
-    if (!getAiCfg().key) { API.toast("先在「AI 设置」里填 API Key"); var c = el.aiConfig; if (c) c.hidden = false; return; }
+    if (!getAiCfg().key) { API.toast("先在「AI 设置」里填 API Key"); openAiModal(); return; }
     var used = net.roster.filter(function (p) { return p.ai; }).length;
     var names = ["AI 小智", "AI 阿丙", "AI 老王"];
     net.roster.push({ id: "ai_" + randId(), name: names[used] || ("AI " + (used + 1)), bot: true, ai: true, avatar: firstFreeAvatar(), seen: now() });
@@ -677,6 +679,10 @@
     else publish(pubTopic(), { t: "profile", id: net.myId, avatar: me.avatar });
     renderLobby();
   }
+  function openAiModal() {
+    loadAiForm();
+    if (el.aiModal) el.aiModal.hidden = false;
+  }
   function testAi() {
     var c = { base: ($("aiBase").value || "").trim(), key: ($("aiKey").value || "").trim(), model: ($("aiModel").value || "").trim() };
     if (!c.base || !c.key || !c.model) { el.aiStatus.textContent = "三样都要填哦"; return; }
@@ -727,7 +733,7 @@
     el.resultOverlay = $("resultOverlay"); el.resultEmoji = $("resultEmoji");
     el.resultTitle = $("resultTitle"); el.resultDetail = $("resultDetail"); el.againBtn = $("againBtn");
     el.nickInput = $("nickInput"); el.roomInput = $("roomInput");
-    el.aiConfig = $("aiConfig"); el.aiStatus = $("aiStatus");
+    el.aiModal = $("aiModal"); el.aiStatus = $("aiStatus");
     el.chatPanel = $("chatPanel"); el.chatBody = $("chatBody"); el.chatMessages = $("chatMessages");
     el.chatBadge = $("chatBadge"); el.chatInput = $("chatInput"); el.chatStatus = $("chatStatus");
     var ct = $("chatToggle");
@@ -749,7 +755,13 @@
     var aib = $("addAiBtn");
     if (aib) aib.addEventListener("click", addAi);
     var act2 = $("aiConfigToggle");
-    if (act2) act2.addEventListener("click", function () { el.aiConfig.hidden = !el.aiConfig.hidden; });
+    if (act2) act2.addEventListener("click", openAiModal);
+    var asb = $("aiSetupBtn");
+    if (asb) asb.addEventListener("click", openAiModal);
+    var acb = $("aiCloseBtn");
+    if (acb) acb.addEventListener("click", function () { if (el.aiModal) el.aiModal.hidden = true; });
+    var amd = $("aiModal");
+    if (amd) amd.addEventListener("click", function (e) { if (e.target === amd) amd.hidden = true; });
     var asv = $("aiSaveBtn");
     if (asv) asv.addEventListener("click", function () {
       try {
@@ -759,6 +771,7 @@
       } catch (e) {}
       if (el.aiStatus) el.aiStatus.textContent = getAiCfg().key ? "已保存 ✓ 只存在你这台设备" : "请填完整";
       API.toast("AI 配置已保存到本机");
+      if (API.refreshAiHome) API.refreshAiHome();
     });
     var atb = $("aiTestBtn");
     if (atb) atb.addEventListener("click", testAi);
@@ -782,7 +795,7 @@
     el.removeBotBtn.addEventListener("click", function () { removeBot(null); });
 
     API.netAction = function (action) { send(action); };
-    API.chatSay = function (text, name) { sendChat(text, name || "AI"); };
+    API.chatSay = function (text, name) { if (net.role) sendChat(text, name || "AI"); };
     API.onQuit = function () { if (net.role) leave(false); };
     API.onRender = function () { if (net.role === "host" && net.started) publishState(); };
     API.onGameEnd = function () { if (net.role === "host" && net.started) publishState(); };
