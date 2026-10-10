@@ -7,7 +7,7 @@
 <meta name="description" content="UNO纸牌：人机对战，或者开个房间把链接发给朋友一起打。" />
 <meta name="theme-color" content="#f6f1e6" />
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-<link rel="stylesheet" href="./styles.css?v16" />
+<link rel="stylesheet" href="./styles.css?v17" />
 </head>
 <body>
 <header class="topbar">
@@ -210,7 +210,7 @@
 <footer class="site-footer">
   <span>&#10022; UNO纸牌</span>
   <p>输赢留在这一局，快乐带到下一局。</p>
-  <small>好友联机 · 手机电脑都能玩 · 版本 v16</small>
+  <small>好友联机 · 手机电脑都能玩 · 版本 v17</small>
 </footer>
 
 <div id="colorPicker" class="overlay" hidden>
@@ -249,7 +249,9 @@
     <label class="field-label" for="aiKey" style="text-align:left">API Key</label>
     <input id="aiKey" class="text-input" type="password" placeholder="在这里粘贴你的 key" autocomplete="off" />
     <label class="field-label" for="aiModel" style="text-align:left">模型名</label>
-    <input id="aiModel" class="text-input" type="text" placeholder="gpt-4o-mini" />
+    <input id="aiModel" class="text-input" type="text" list="aiModelList" placeholder="gpt-4o-mini" />
+    <datalist id="aiModelList"></datalist>
+    <p class="hint" style="margin-top:6px">⚠️ 模型名必须和服务商文档**完全一致**（大小写、`Qwen/` 这类前缀都不能差）。点上面的服务商按钮可以自动填好。</p>
     <div class="ai-config-foot">
       <button id="aiSaveBtn" class="primary-btn" type="button">保存到本机</button>
       <button id="aiTestBtn" class="ghost-btn" type="button">测试一下</button>
@@ -272,8 +274,8 @@
   </div>
 </div>
 
-<script src="./mqtt.min.js?v16" defer></script>
-<script src="./app.js?v16" defer></script>
-<script src="./net.js?v16" defer></script>
+<script src="./mqtt.min.js?v17" defer></script>
+<script src="./app.js?v17" defer></script>
+<script src="./net.js?v17" defer></script>
 </body>
 </html>
