@@ -114,7 +114,7 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false,
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false, aiLastError: "",
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 1150
   };
 
@@ -815,6 +815,7 @@
     }).then(function (data) {
       clearTimeout(timer);
       state.aiThinking = null;
+      state.aiLastError = "";
       var msg = (data && data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : "";
       var talk = String(msg || "").replace(/\{[\s\S]*\}/, "").trim();
       if (talk) { log(p.name + "：" + talk.slice(0, 50)); aiSay(talk.slice(0, 60), p.name); }
@@ -826,8 +827,15 @@
     }).catch(function (err) {
       clearTimeout(timer);
       state.aiThinking = null;
-      var why = (err && err.name === "AbortError") ? "超时" : ((err && err.message) ? err.message.slice(0, 40) : "网络问题");
-      log(p.name + " 调用模型失败（" + why + "），改用普通策略");
+      var why;
+      if (err && err.name === "AbortError") why = "请求超时（25 秒没响应）";
+      else if (err && /Failed to fetch|NetworkError|Load failed/i.test(err.message || "")) why = "连不上接口（多为跨域CORS被拦 / 网络不通 / 地址写错）";
+      else why = (err && err.message) ? err.message : "网络问题";
+      var detail = why + "  ←  " + url;
+      state.aiLastError = detail;
+      log(p.name + " 调用模型失败：" + why);
+      if (window.__UNO_API__ && window.__UNO_API__.onAiError) window.__UNO_API__.onAiError(detail);
+      toast("AI 调用失败：" + why.slice(0, 40));
       botMove();
     });
   }
@@ -1150,6 +1158,7 @@
     AVATARS: AVATARS,
     avatarName: avatarName,
     refreshAiHome: refreshAiHome,
+    onAiError: null,
     callUnoFor: callUnoFor,
     catchUnoFor: catchUnoFor,
     chatSay: null,
