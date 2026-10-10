@@ -477,7 +477,7 @@
     if ($("aiBase")) $("aiBase").value = c.base;
     if ($("aiKey")) $("aiKey").value = c.key;
     if ($("aiModel")) $("aiModel").value = c.model;
-    if ($("aiStatus")) $("aiStatus").textContent = c.key ? "已保存配置 ✓" : "还没配置";
+    aiStatusHint();
   }
   function removeBot(botId) {
     if (net.role !== "host" || net.started) return;
@@ -683,6 +683,18 @@
     loadAiForm();
     if (el.aiModal) el.aiModal.hidden = false;
   }
+  function aiStatusHint() {
+    if (!el.aiStatus) return;
+    var c = getAiCfg();
+    var mm = c.model || "";
+    if (/r1|reasoner|thinking|qwen3|qwq|glm-z1/i.test(mm)) {
+      el.aiStatus.textContent = "⚠️ " + mm + " 是推理模型，会先想很久再出牌（容易超时）。建议换成 qwen2.5-7b / deepseek-chat 这类普通模型";
+    } else if (!c.key) {
+      el.aiStatus.textContent = "还没配置";
+    } else {
+      el.aiStatus.textContent = "✓ 已配置：" + (c.model || "未填模型") + "（只存在你这台设备）";
+    }
+  }
   function testAi() {
     var c = { base: ($("aiBase").value || "").trim(), key: ($("aiKey").value || "").trim(), model: ($("aiModel").value || "").trim() };
     if (!c.base || !c.key || !c.model) { el.aiStatus.textContent = "三样都要填哦"; return; }
@@ -775,7 +787,7 @@
         localStorage.setItem("uno-ai-key", ($("aiKey").value || "").trim());
         localStorage.setItem("uno-ai-model", ($("aiModel").value || "").trim());
       } catch (e) {}
-      if (el.aiStatus) el.aiStatus.textContent = getAiCfg().key ? "已保存 ✓ 只存在你这台设备" : "请填完整";
+      aiStatusHint();
       API.toast("AI 配置已保存到本机");
       if (API.refreshAiHome) API.refreshAiHome();
     });
