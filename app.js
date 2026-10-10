@@ -114,7 +114,7 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false, aiLastError: "", aiFailStreak: 0,
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false, aiLastError: "", aiFailStreak: 0, logs: [],
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 1150
   };
 
@@ -387,6 +387,28 @@
     els.log.appendChild(d);
     while (els.log.children.length > 3) els.log.removeChild(els.log.firstChild);
     setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 3200);
+    state.logs.push({ t: Date.now(), text: msg });
+    if (state.logs.length > 300) state.logs.shift();
+    renderLogPanel();
+  }
+  function renderLogPanel() {
+    if (!els.logList) return;
+    els.logList.innerHTML = "";
+    state.logs.forEach(function (e, i) {
+      var row = document.createElement("div");
+      row.className = "log-item";
+      var idx = document.createElement("span");
+      idx.className = "log-idx"; idx.textContent = i + 1;
+      var tx = document.createElement("span");
+      tx.textContent = e.text;
+      row.appendChild(idx); row.appendChild(tx);
+      els.logList.appendChild(row);
+    });
+    els.logList.scrollTop = els.logList.scrollHeight;
+  }
+  function logText() {
+    var head = "UNO纸牌 对局记录  " + new Date().toLocaleString() + "\\n";
+    return head + state.logs.map(function (e, i) { return (i + 1) + ". " + e.text; }).join("\\n");
   }
 
   function ensureDeck() {
@@ -420,6 +442,7 @@
     p.hand.splice(at, 1);
     state.discard.push(card);
     state.color = card.c === "wild" ? chosenColor : card.c;
+    log(p.name + " 出牌：" + cardDesc(card) + (card.c === "wild" ? "（指定 " + (COLOR_CN[chosenColor] || chosenColor || "?") + "）" : ""));
     state.canPass = false;
     if (p.hand.length > 1) state.unoCalled[pi] = false;
     SFX.play();
@@ -625,6 +648,7 @@
     var p = state.players[pi];
     var got = drawTo(p, 1);
     SFX.draw();
+    log(p.name + " 抽了一张牌");
     render();
     if (!got.length) { toast("牌堆空了"); passTurn(pi, 1); return; }
     var c = got[0];
@@ -1024,6 +1048,9 @@
     els.game.hidden = false;
     var chatEl = document.getElementById("chatPanel");
     if (chatEl && state.mode !== "net") chatEl.hidden = true;
+    state.logs = [];
+    if (els.logPanel) { els.logPanel.hidden = false; els.logBody.hidden = true; }
+    renderLogPanel();
     els.resultOverlay.hidden = true;
     els.colorPicker.hidden = true;
     els.log.innerHTML = "";
@@ -1044,6 +1071,7 @@
     els.game.hidden = true;
     els.home.hidden = false;
     els.resultOverlay.hidden = true;
+    if (els.logPanel) els.logPanel.hidden = true;
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1078,6 +1106,18 @@
     els.revealBox = $("revealBox");
     els.revealTitle = $("revealTitle");
     els.revealCards = $("revealCards");
+    els.logPanel = $("logPanel"); els.logBody = $("logBody"); els.logList = $("logList");
+    var lt = $("logToggle");
+    if (lt) lt.addEventListener("click", function () { els.logBody.hidden = !els.logBody.hidden; if (!els.logBody.hidden) renderLogPanel(); });
+    var lc = $("logClose");
+    if (lc) lc.addEventListener("click", function () { els.logBody.hidden = true; });
+    var lcp = $("logCopy");
+    if (lcp) lcp.addEventListener("click", function () {
+      var txt = logText();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () { toast("对局记录已复制，可以发给别人看"); }, function () { toast("复制失败，请手动选中"); });
+      } else { toast("这个浏览器不支持一键复制"); }
+    });
     if (els.challengeBox) {
       var cYes = $("challengeYesBtn"), cNo = $("challengeNoBtn");
       if (cYes) cYes.addEventListener("click", function () { answerChallenge(true); });
