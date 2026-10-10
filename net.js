@@ -25,7 +25,7 @@
     started: false,
     lastPub: 0,
     brokerIndex: 0,
-    hostSeen: 0, confirmKick: null,
+    hostSeen: 0, confirmKick: null, chat: [], unread: 0,
     pollTimer: null,
     hbTimer: null,
     pending: []
@@ -240,6 +240,7 @@
         var taken = net.roster.some(function (p) { return p.avatar === want; });
         net.roster.push({ id: msg.id, name: (msg.name || "玩家").slice(0, 10), bot: false, avatar: (want >= 0 && !taken) ? want : firstFreeAvatar(), seen: now() });
         API.toast((msg.name || "玩家") + " 加入了房间");
+        publish(pubTopic(), { t: "chat", id: "sys", sys: true, name: "系统", text: (msg.name || "玩家") + " 加入了房间" });
         publishRoster();
         renderLobby();
         return;
@@ -272,6 +273,11 @@
         publishRoster();
         return;
       }
+      if (msg.t === "chat") {
+        if (msg.id === net.myId) return;
+        addChat(msg.name || "玩家", msg.text || "", false, !!msg.sys);
+        return;
+      }
       if (msg.t === "sync" && net.role === "host") {
         publishState();
         return;
@@ -285,6 +291,7 @@
         publishRoster();
         renderLobby();
         API.toast((msg.name || "一位玩家") + " 离开了");
+        publish(pubTopic(), { t: "chat", id: "sys", sys: true, name: "系统", text: (msg.name || "一位玩家") + " 离开了房间" });
         return;
       }
       return;
@@ -391,7 +398,7 @@
     S.role = "host";
     S.count = net.roster.length;
     S.seat = 0;
-    S.roster = net.roster.map(function (p) { return { name: p.name, bot: !!p.bot, avatar: p.avatar }; });
+    S.roster = net.roster.map(function (p) { return { name: p.name, bot: !!p.bot, avatar: p.avatar, ai: !!p.ai }; });
     publishRoster();
     API.startGame(false);
     switchToGame();
@@ -406,6 +413,50 @@
     publishRoster();
     renderLobby();
     API.toast("已把 " + (name || "对方") + " 请出房间");
+  }
+  function addAi() {
+    if (net.role !== "host" || net.started) return;
+    if (net.roster.length >= (S.count || 4)) { API.toast("人数已经满了"); return; }
+    if (!getAiCfg().key) { API.toast("先在「AI 设置」里填 API Key"); var c = el.aiConfig; if (c) c.hidden = false; return; }
+    var used = net.roster.filter(function (p) { return p.ai; }).length;
+    var names = ["AI 小智", "AI 阿丙", "AI 老王"];
+    net.roster.push({ id: "ai_" + randId(), name: names[used] || ("AI " + (used + 1)), bot: true, ai: true, avatar: firstFreeAvatar(), seen: now() });
+    publishRoster();
+    renderLobby();
+    API.toast("AI 对手已加入，开局后会调用大模型");
+  }
+  var AI_PRESETS = [
+    { name: "OpenAI", base: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+    { name: "DeepSeek", base: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+    { name: "月之暗面", base: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+    { name: "智谱GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
+    { name: "通义千问", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+    { name: "硅基流动", base: "https://api.siliconflow.cn/v1", model: "Qwen/Qwen2.5-7B-Instruct" }
+  ];
+  function getAiCfg() {
+    try { return { base: localStorage.getItem("uno-ai-base") || "", key: localStorage.getItem("uno-ai-key") || "", model: localStorage.getItem("uno-ai-model") || "" }; }
+    catch (e) { return { base: "", key: "", model: "" }; }
+  }
+  function renderAiPresets() {
+    var box = $("aiPresets"); if (!box) return;
+    box.innerHTML = "";
+    AI_PRESETS.forEach(function (pz) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "preset-chip"; b.textContent = pz.name;
+      b.addEventListener("click", function () {
+        $("aiBase").value = pz.base; $("aiModel").value = pz.model;
+        Array.prototype.forEach.call(box.children, function (x) { x.classList.remove("is-on"); });
+        b.classList.add("is-on");
+      });
+      box.appendChild(b);
+    });
+  }
+  function loadAiForm() {
+    var c = getAiCfg();
+    if ($("aiBase")) $("aiBase").value = c.base;
+    if ($("aiKey")) $("aiKey").value = c.key;
+    if ($("aiModel")) $("aiModel").value = c.model;
+    if ($("aiStatus")) $("aiStatus").textContent = c.key ? "已保存配置 ✓" : "还没配置";
   }
   function removeBot(botId) {
     if (net.role !== "host" || net.started) return;
@@ -438,12 +489,18 @@
     el.game.hidden = true;
     el.lobby.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
+    el.chatPanel.hidden = false;
+    net.chat = []; net.unread = 0; renderChat(); updateBadge();
     el.roomCode.textContent = net.room;
     var link = location.origin + location.pathname + "?room=" + encodeURIComponent(net.room);
     el.shareLink.value = link;
     el.beginBtn.hidden = net.role !== "host";
     el.addBotBtn.hidden = net.role !== "host";
     el.removeBotBtn.hidden = net.role !== "host";
+    if (el.addAiBtn === undefined) el.addAiBtn = $("addAiBtn");
+    if (el.aiCfgToggle === undefined) el.aiCfgToggle = $("aiConfigToggle");
+    if (el.addAiBtn) el.addAiBtn.hidden = net.role !== "host";
+    if (el.aiCfgToggle) el.aiCfgToggle.hidden = net.role !== "host";
     renderLobby();
   }
 
@@ -468,7 +525,7 @@
       nm.textContent = p.name;
       var tag = document.createElement("span");
       tag.className = "lobby-tag";
-      tag.textContent = p.bot ? "电脑" : (p.id === net.myId ? "你" : (i === 0 ? "房主" : "玩家"));
+      tag.textContent = p.ai ? "大模型" : (p.bot ? "电脑" : (p.id === net.myId ? "你" : (i === 0 ? "房主" : "玩家")));
       row.appendChild(av); row.appendChild(nm); row.appendChild(tag);
       if (net.role === "host" && p.id !== net.myId) {
         var confirming = !p.bot && net.confirmKick && net.confirmKick.id === p.id && now() < net.confirmKick.until;
@@ -528,6 +585,43 @@
     el.againBtn.hidden = true;
   }
 
+  function updateBadge() {
+    if (!el.chatBadge) return;
+    el.chatBadge.textContent = net.unread || 0;
+    el.chatBadge.hidden = !net.unread;
+  }
+  function renderChat() {
+    if (!el.chatMessages) return;
+    el.chatMessages.innerHTML = "";
+    net.chat.forEach(function (m) {
+      var d = document.createElement("div");
+      d.className = "chat-msg" + (m.mine ? " mine" : "") + (m.sys ? " sys" : "");
+      if (m.sys) { d.textContent = m.text; }
+      else {
+        var w = document.createElement("span"); w.className = "who"; w.textContent = m.name + "：";
+        d.appendChild(w); d.appendChild(document.createTextNode(m.text));
+      }
+      el.chatMessages.appendChild(d);
+    });
+  }
+  function scrollChat() { if (el.chatMessages) el.chatMessages.scrollTop = el.chatMessages.scrollHeight; }
+  function addChat(name, text, mine, sys) {
+    if (!text) return;
+    net.chat.push({ name: name, text: String(text).slice(0, 80), mine: !!mine, sys: !!sys });
+    if (net.chat.length > 60) net.chat.shift();
+    renderChat();
+    var open = el.chatBody && !el.chatBody.hidden;
+    if (!open && !mine) { net.unread = (net.unread || 0) + 1; updateBadge(); }
+    if (open) scrollChat();
+  }
+  function sendChat(text, asName) {
+    var v = String(text || "").trim();
+    if (!v) return;
+    if (!net.connected) { API.toast("还没连上，稍后再发"); return; }
+    var nm = asName || net.myName;
+    publish(pubTopic(), { t: "chat", id: asName ? "sys" : net.myId, name: nm, text: v.slice(0, 80) });
+    if (!asName) addChat(nm, v, true);
+  }
   function cycleMyAvatar() {
     var me = null;
     net.roster.forEach(function (p) { if (p.id === net.myId) me = p; });
@@ -543,6 +637,21 @@
     else publish(pubTopic(), { t: "profile", id: net.myId, avatar: me.avatar });
     renderLobby();
   }
+  function testAi() {
+    var c = { base: ($("aiBase").value || "").trim(), key: ($("aiKey").value || "").trim(), model: ($("aiModel").value || "").trim() };
+    if (!c.base || !c.key || !c.model) { el.aiStatus.textContent = "三样都要填哦"; return; }
+    el.aiStatus.textContent = "测试中…";
+    fetch(c.base.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
+      body: JSON.stringify({ model: c.model, messages: [{ role: "user", content: "只回复两个字：可以" }] })
+    }).then(function (r) { return r.text().then(function (x) { return { ok: r.ok, code: r.status, body: x }; }); })
+      .then(function (res) {
+        if (res.ok) { el.aiStatus.textContent = "✓ 接口通了，可以用"; API.toast("AI 接口测试成功"); }
+        else { el.aiStatus.textContent = "✗ 返回 " + res.code + "：" + String(res.body).slice(0, 70); }
+      })
+      .catch(function (e) { el.aiStatus.textContent = "✗ 失败了：" + ((e && e.message) ? e.message.slice(0, 60) : "网络/跨域问题"); });
+  }
   function setStatus(text) { if (el.lobbyStatus) el.lobbyStatus.textContent = text; }
 
   function leave(silent) {
@@ -554,6 +663,8 @@
     el.lobby.hidden = true;
     el.home.hidden = false;
     el.game.hidden = true;
+    if (el.chatPanel) el.chatPanel.hidden = true;
+    net.chat = []; net.unread = 0; renderChat(); updateBadge();
     el.resultOverlay.hidden = true;
     el.againBtn.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -576,6 +687,41 @@
     el.resultOverlay = $("resultOverlay"); el.resultEmoji = $("resultEmoji");
     el.resultTitle = $("resultTitle"); el.resultDetail = $("resultDetail"); el.againBtn = $("againBtn");
     el.nickInput = $("nickInput"); el.roomInput = $("roomInput");
+    el.aiConfig = $("aiConfig"); el.aiStatus = $("aiStatus");
+    el.chatPanel = $("chatPanel"); el.chatBody = $("chatBody"); el.chatMessages = $("chatMessages");
+    el.chatBadge = $("chatBadge"); el.chatInput = $("chatInput");
+    var ct = $("chatToggle");
+    if (ct) ct.addEventListener("click", function () {
+      el.chatBody.hidden = !el.chatBody.hidden;
+      if (!el.chatBody.hidden) { net.unread = 0; updateBadge(); scrollChat(); }
+    });
+    var cc = $("chatClose");
+    if (cc) cc.addEventListener("click", function () { el.chatBody.hidden = true; });
+    var cf = $("chatForm");
+    if (cf) cf.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var v = (el.chatInput.value || "").trim();
+      if (!v) return;
+      sendChat(v);
+      el.chatInput.value = "";
+    });
+    var aib = $("addAiBtn");
+    if (aib) aib.addEventListener("click", addAi);
+    var act2 = $("aiConfigToggle");
+    if (act2) act2.addEventListener("click", function () { el.aiConfig.hidden = !el.aiConfig.hidden; });
+    var asv = $("aiSaveBtn");
+    if (asv) asv.addEventListener("click", function () {
+      try {
+        localStorage.setItem("uno-ai-base", ($("aiBase").value || "").trim());
+        localStorage.setItem("uno-ai-key", ($("aiKey").value || "").trim());
+        localStorage.setItem("uno-ai-model", ($("aiModel").value || "").trim());
+      } catch (e) {}
+      if (el.aiStatus) el.aiStatus.textContent = getAiCfg().key ? "已保存 ✓ 只存在你这台设备" : "请填完整";
+      API.toast("AI 配置已保存到本机");
+    });
+    var atb = $("aiTestBtn");
+    if (atb) atb.addEventListener("click", testAi);
+    renderAiPresets(); loadAiForm();
 
     $("createRoomBtn").addEventListener("click", function () {
       var nm = (el.nickInput.value || "").trim() || "房主";
@@ -595,6 +741,7 @@
     el.removeBotBtn.addEventListener("click", function () { removeBot(null); });
 
     API.netAction = function (action) { send(action); };
+    API.chatSay = function (text, name) { sendChat(text, name || "AI"); };
     API.onRender = function () { if (net.role === "host" && net.started) publishState(); };
     API.onGameEnd = function () { if (net.role === "host" && net.started) publishState(); };
 
