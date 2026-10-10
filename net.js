@@ -123,6 +123,10 @@
   }
   function sub(topic) { if (net.client) net.client.subscribe(topic, { qos: 0 }); }
   function publish(topic, obj) { if (net.client) net.client.publish(topic, JSON.stringify(obj), { qos: 0 }); }
+  function publishChat(obj) {
+    if (!net.client) return;
+    net.client.publish(pubTopic(), JSON.stringify(obj), { qos: 1 });
+  }
 
   // ---------- 房主 ----------
   function createRoom(name) {
@@ -130,6 +134,7 @@
     net.myId = randId();
     net.myName = name || "房主";
     net.room = randCode();
+    net.chat = []; net.unread = 0;
     net.roster = [{ id: net.myId, name: net.myName, bot: false, avatar: savedAvatar(), seen: now() }];
     net.myAvatar = net.roster[0].avatar;
     net.mySeat = 0;
@@ -142,10 +147,13 @@
   }
 
   function joinRoom(room, name) {
+    // 已经在这个房间里了就直接回大厅，别换身份
+    if (net.client && net.room === String(room).toUpperCase()) { net.myName = name || net.myName; showLobby(); return; }
     net.role = "guest";
     net.myId = randId();
     net.myName = name || "玩家";
     net.room = room.toUpperCase();
+    net.chat = []; net.unread = 0;
     connect(function () {
       sub(pubTopic());
       sub(privTopic(net.myId));
@@ -240,7 +248,7 @@
         var taken = net.roster.some(function (p) { return p.avatar === want; });
         net.roster.push({ id: msg.id, name: (msg.name || "玩家").slice(0, 10), bot: false, avatar: (want >= 0 && !taken) ? want : firstFreeAvatar(), seen: now() });
         API.toast((msg.name || "玩家") + " 加入了房间");
-        publish(pubTopic(), { t: "chat", id: "sys", sys: true, name: "系统", text: (msg.name || "玩家") + " 加入了房间" });
+        publishChat({ t: "chat", id: "sys", mid: "sys-" + now() + "-" + Math.random(), sys: true, name: "系统", text: (msg.name || "玩家") + " 加入了房间" });
         publishRoster();
         renderLobby();
         return;
@@ -274,7 +282,14 @@
         return;
       }
       if (msg.t === "chat") {
-        if (msg.id === net.myId) return;
+        if (msg.mid) {
+          net.seenChat = net.seenChat || {};
+          if (net.seenChat[msg.mid]) return;
+          net.seenChat[msg.mid] = 1;
+          var keys = Object.keys(net.seenChat);
+          if (keys.length > 200) delete net.seenChat[keys[0]];
+        }
+        if (!msg.sys && msg.id === net.myId) return;
         addChat(msg.name || "玩家", msg.text || "", false, !!msg.sys);
         return;
       }
@@ -291,7 +306,7 @@
         publishRoster();
         renderLobby();
         API.toast((msg.name || "一位玩家") + " 离开了");
-        publish(pubTopic(), { t: "chat", id: "sys", sys: true, name: "系统", text: (msg.name || "一位玩家") + " 离开了房间" });
+        publishChat({ t: "chat", id: "sys", mid: "sys-" + now() + "-" + Math.random(), sys: true, name: "系统", text: (msg.name || "一位玩家") + " 离开了房间" });
         return;
       }
       return;
@@ -490,7 +505,7 @@
     el.lobby.hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
     el.chatPanel.hidden = false;
-    net.chat = []; net.unread = 0; renderChat(); updateBadge();
+    renderChat(); updateBadge();
     el.roomCode.textContent = net.room;
     var link = location.origin + location.pathname + "?room=" + encodeURIComponent(net.room);
     el.shareLink.value = link;
@@ -617,9 +632,10 @@
   function sendChat(text, asName) {
     var v = String(text || "").trim();
     if (!v) return;
-    if (!net.connected) { API.toast("还没连上，稍后再发"); return; }
+    if (!net.connected) { API.toast("还没连上联机服务器，稍等一下再发"); return; }
     var nm = asName || net.myName;
-    publish(pubTopic(), { t: "chat", id: asName ? "sys" : net.myId, name: nm, text: v.slice(0, 80) });
+    var mid = net.myId + "-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    publishChat({ t: "chat", id: asName ? "sys" : net.myId, mid: mid, name: nm, text: v.slice(0, 80) });
     if (!asName) addChat(nm, v, true);
   }
   function cycleMyAvatar() {
@@ -704,6 +720,7 @@
       if (!v) return;
       sendChat(v);
       el.chatInput.value = "";
+      el.chatInput.focus();
     });
     var aib = $("addAiBtn");
     if (aib) aib.addEventListener("click", addAi);
