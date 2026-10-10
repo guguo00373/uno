@@ -809,7 +809,14 @@
       signal: ctl ? ctl.signal : undefined
     }).then(function (r) {
       return r.text().then(function (txt) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        if (!r.ok) {
+          var em = txt;
+          try {
+            var ej = JSON.parse(txt);
+            em = ej.message || (ej.error && (ej.error.message || ej.error)) || txt;
+          } catch (e2) {}
+          throw new Error("HTTP " + r.status + "：" + String(em).slice(0, 90));
+        }
         return JSON.parse(txt);
       });
     }).then(function (data) {
