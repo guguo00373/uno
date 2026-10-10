@@ -941,6 +941,8 @@
 
     els.home.hidden = true;
     els.game.hidden = false;
+    var chatEl = document.getElementById("chatPanel");
+    if (chatEl && state.mode !== "net") chatEl.hidden = true;
     els.resultOverlay.hidden = true;
     els.colorPicker.hidden = true;
     els.log.innerHTML = "";
