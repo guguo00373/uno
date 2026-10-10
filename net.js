@@ -25,7 +25,7 @@
     started: false,
     lastPub: 0,
     brokerIndex: 0,
-    hostSeen: 0, confirmKick: null, chat: [], unread: 0,
+    hostSeen: 0, confirmKick: null, chat: [], unread: 0, pending: [],
     pollTimer: null,
     hbTimer: null,
     pending: []
@@ -103,9 +103,13 @@
     client.on("connect", function () {
       net.connected = true;
       setStatus("已连接");
+      setChatStatus("已连接", true);
+      flushChat();
       if (onReady) onReady();
     });
-    client.on("reconnect", function () { setStatus("正在重连…"); });
+    client.on("reconnect", function () { setStatus("正在重连…"); setChatStatus("重连中…", false); });
+    client.on("close", function () { net.connected = false; setChatStatus("已断开", false); });
+    client.on("offline", function () { net.connected = false; setChatStatus("已离线", false); });
     client.on("error", function (e) {
       console.warn("mqtt error", e && e.message);
       if (!net.connected) {
@@ -600,6 +604,17 @@
     el.againBtn.hidden = true;
   }
 
+  function setChatStatus(text, ok) {
+    if (!el.chatStatus) return;
+    el.chatStatus.textContent = text;
+    el.chatStatus.className = "chat-status" + (ok === true ? " ok" : (ok === false ? " bad" : ""));
+  }
+  function flushChat() {
+    if (!net.pending || !net.pending.length) return;
+    var q = net.pending.slice(); net.pending = [];
+    q.forEach(function (m) { publishChat(m); });
+    setChatStatus("已连接", true);
+  }
   function updateBadge() {
     if (!el.chatBadge) return;
     el.chatBadge.textContent = net.unread || 0;
@@ -632,10 +647,19 @@
   function sendChat(text, asName) {
     var v = String(text || "").trim();
     if (!v) return;
-    if (!net.connected) { API.toast("还没连上联机服务器，稍等一下再发"); return; }
     var nm = asName || net.myName;
     var mid = net.myId + "-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
-    publishChat({ t: "chat", id: asName ? "sys" : net.myId, mid: mid, name: nm, text: v.slice(0, 80) });
+    var packet = { t: "chat", id: asName ? "sys" : net.myId, mid: mid, name: nm, text: v.slice(0, 80) };
+    if (!net.connected) {
+      net.pending = net.pending || [];
+      net.pending.push(packet);
+      if (net.pending.length > 20) net.pending.shift();
+      if (!asName) addChat(nm, v, true);
+      setChatStatus("待发送 " + net.pending.length + " 条", false);
+      API.toast("还没连上服务器，连上后会自动发出去");
+      return;
+    }
+    publishChat(packet);
     if (!asName) addChat(nm, v, true);
   }
   function cycleMyAvatar() {
@@ -705,7 +729,7 @@
     el.nickInput = $("nickInput"); el.roomInput = $("roomInput");
     el.aiConfig = $("aiConfig"); el.aiStatus = $("aiStatus");
     el.chatPanel = $("chatPanel"); el.chatBody = $("chatBody"); el.chatMessages = $("chatMessages");
-    el.chatBadge = $("chatBadge"); el.chatInput = $("chatInput");
+    el.chatBadge = $("chatBadge"); el.chatInput = $("chatInput"); el.chatStatus = $("chatStatus");
     var ct = $("chatToggle");
     if (ct) ct.addEventListener("click", function () {
       el.chatBody.hidden = !el.chatBody.hidden;
