@@ -7,7 +7,7 @@
 <meta name="description" content="UNO纸牌：人机对战，或者开个房间把链接发给朋友一起打。" />
 <meta name="theme-color" content="#f6f1e6" />
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-<link rel="stylesheet" href="./styles.css?v7" />
+<link rel="stylesheet" href="./styles.css?v8" />
 </head>
 <body>
 <header class="topbar">
@@ -139,7 +139,25 @@
       <div class="lobby-actions">
         <button id="addBotBtn" class="ghost-btn" type="button">+ 加一个电脑</button>
         <button id="removeBotBtn" class="ghost-btn" type="button">− 减一个电脑</button>
+        <button id="addAiBtn" class="ghost-btn" type="button">&#129302; 加一个 AI 对手</button>
+        <button id="aiConfigToggle" class="ghost-btn" type="button">&#9881;&#65039; AI 设置</button>
         <button id="beginBtn" class="primary-btn" type="button">开始游戏</button>
+      </div>
+      <div id="aiConfig" class="ai-config" hidden>
+        <p class="field-label">一键选服务商（也可以自己填）</p>
+        <div class="preset-row" id="aiPresets"></div>
+        <label class="field-label" for="aiBase">接口地址</label>
+        <input id="aiBase" class="text-input" type="text" placeholder="https://api.openai.com/v1" />
+        <label class="field-label" for="aiKey">API Key</label>
+        <input id="aiKey" class="text-input" type="password" placeholder="在这里粘贴你的 key" autocomplete="off" />
+        <label class="field-label" for="aiModel">模型名</label>
+        <input id="aiModel" class="text-input" type="text" placeholder="gpt-4o-mini" />
+        <div class="ai-config-foot">
+          <button id="aiSaveBtn" class="primary-btn" type="button">保存到本机</button>
+          <button id="aiTestBtn" class="ghost-btn" type="button">测试一下</button>
+          <span id="aiStatus" class="hint"></span>
+        </div>
+        <p class="hint">&#128274; Key 只保存在你自己的浏览器里，不会上传到网站，别人看不到。</p>
       </div>
       <p id="lobbyStatus" class="hint"></p>
     </div>
@@ -198,7 +216,7 @@
 <footer class="site-footer">
   <span>&#10022; UNO纸牌</span>
   <p>输赢留在这一局，快乐带到下一局。</p>
-  <small>好友联机 · 手机电脑都能玩 · 版本 v7</small>
+  <small>好友联机 · 手机电脑都能玩 · 版本 v8</small>
 </footer>
 
 <div id="colorPicker" class="overlay" hidden>
@@ -227,8 +245,20 @@
 
 <div id="toast" class="toast" aria-live="polite"></div>
 
-<script src="./mqtt.min.js?v7" defer></script>
-<script src="./app.js?v7" defer></script>
-<script src="./net.js?v7" defer></script>
+<div id="chatPanel" class="chat-panel" hidden>
+  <button id="chatToggle" class="chat-toggle" type="button">&#128172; 聊天<span id="chatBadge" class="chat-badge" hidden>0</span></button>
+  <div id="chatBody" class="chat-body" hidden>
+    <div class="chat-head"><span>房间聊天</span><button id="chatClose" class="chat-close" type="button">&times;</button></div>
+    <div id="chatMessages" class="chat-messages"></div>
+    <form id="chatForm" class="chat-form" autocomplete="off">
+      <input id="chatInput" class="text-input" type="text" maxlength="80" placeholder="说点什么…" />
+      <button class="primary-btn" type="submit">发送</button>
+    </form>
+  </div>
+</div>
+
+<script src="./mqtt.min.js?v8" defer></script>
+<script src="./app.js?v8" defer></script>
+<script src="./net.js?v8" defer></script>
 </body>
 </html>
