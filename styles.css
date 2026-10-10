@@ -537,3 +537,11 @@ button{font-family:inherit}
 .chat-status.ok{color:#1f7a3f;background:#e4f6e9}
 .chat-status.bad{color:#a05f14;background:#fff2d8}
 .chat-form .primary-btn:disabled{opacity:.45;cursor:not-allowed}
+/* ---------- AI 托管按钮 ---------- */
+.ghost-btn.is-on{
+  background:#6b4fd8;color:#fff;border-color:#6b4fd8;
+  box-shadow:0 0 0 3px rgba(107,79,216,.18);
+}
+.ghost-btn.is-on::after{content:"已开启";font-size:11px;margin-left:6px;opacity:.85}
+.ai-modal{max-width:430px;text-align:left}
+.ai-modal h3{text-align:center}
