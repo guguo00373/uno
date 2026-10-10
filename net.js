@@ -686,17 +686,23 @@
   function testAi() {
     var c = { base: ($("aiBase").value || "").trim(), key: ($("aiKey").value || "").trim(), model: ($("aiModel").value || "").trim() };
     if (!c.base || !c.key || !c.model) { el.aiStatus.textContent = "三样都要填哦"; return; }
-    el.aiStatus.textContent = "测试中…";
-    fetch(c.base.replace(/\/+$/, "") + "/chat/completions", {
+    var turl = c.base.replace(/\/+$/, "") + "/chat/completions";
+    el.aiStatus.textContent = "测试中… 正在请求 " + turl;
+    fetch(turl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
       body: JSON.stringify({ model: c.model, messages: [{ role: "user", content: "只回复两个字：可以" }] })
     }).then(function (r) { return r.text().then(function (x) { return { ok: r.ok, code: r.status, body: x }; }); })
       .then(function (res) {
-        if (res.ok) { el.aiStatus.textContent = "✓ 接口通了，可以用"; API.toast("AI 接口测试成功"); }
-        else { el.aiStatus.textContent = "✗ 返回 " + res.code + "：" + String(res.body).slice(0, 70); }
+        if (res.ok) { el.aiStatus.textContent = "✓ 接口通了，可以正常用"; API.toast("AI 接口测试成功"); }
+        else {
+          el.aiStatus.textContent = "✗ 服务器返回 " + res.code + "\n" + "内容：" + String(res.body).slice(0, 120) + "\n" + "常见原因：Key 不对 / 模型名不对 / 地址不对";
+        }
       })
-      .catch(function (e) { el.aiStatus.textContent = "✗ 失败了：" + ((e && e.message) ? e.message.slice(0, 60) : "网络/跨域问题"); });
+      .catch(function (e) {
+        var m = (e && e.message) ? e.message : "网络错误";
+        el.aiStatus.textContent = "✗ 连不上这个地址：" + turl + "\n" + "报错：" + m + "\n" + "最常见原因：① 浏览器跨域(CORS)被服务商拦截 ② 这个域名在你网络下不通（如 OpenAI 在国内） ③ 地址填错";
+      });
   }
   function setStatus(text) { if (el.lobbyStatus) el.lobbyStatus.textContent = text; }
 
@@ -796,6 +802,11 @@
 
     API.netAction = function (action) { send(action); };
     API.chatSay = function (text, name) { if (net.role) sendChat(text, name || "AI"); };
+    API.onAiError = function (detail) {
+      if (el.aiStatus) el.aiStatus.textContent = "✗ 上次调用失败：" + detail;
+      if (el.aiModal && !el.aiModal.hidden) return;
+      if (net.role) addChat("系统", "AI 调用失败：" + detail, false, true);
+    };
     API.onQuit = function () { if (net.role) leave(false); };
     API.onRender = function () { if (net.role === "host" && net.started) publishState(); };
     API.onGameEnd = function () { if (net.role === "host" && net.started) publishState(); };
