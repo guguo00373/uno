@@ -7,7 +7,7 @@
 <meta name="description" content="UNO纸牌：人机对战，或者开个房间把链接发给朋友一起打。" />
 <meta name="theme-color" content="#f6f1e6" />
 <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-<link rel="stylesheet" href="./styles.css?v9" />
+<link rel="stylesheet" href="./styles.css?v10" />
 </head>
 <body>
 <header class="topbar">
@@ -216,7 +216,7 @@
 <footer class="site-footer">
   <span>&#10022; UNO纸牌</span>
   <p>输赢留在这一局，快乐带到下一局。</p>
-  <small>好友联机 · 手机电脑都能玩 · 版本 v9</small>
+  <small>好友联机 · 手机电脑都能玩 · 版本 v10</small>
 </footer>
 
 <div id="colorPicker" class="overlay" hidden>
@@ -248,7 +248,7 @@
 <div id="chatPanel" class="chat-panel" hidden>
   <button id="chatToggle" class="chat-toggle" type="button">&#128172; 聊天<span id="chatBadge" class="chat-badge" hidden>0</span></button>
   <div id="chatBody" class="chat-body" hidden>
-    <div class="chat-head"><span>房间聊天</span><button id="chatClose" class="chat-close" type="button">&times;</button></div>
+    <div class="chat-head"><span>房间聊天 <i id="chatStatus" class="chat-status">连接中…</i></span><button id="chatClose" class="chat-close" type="button">&times;</button></div>
     <div id="chatMessages" class="chat-messages"></div>
     <form id="chatForm" class="chat-form" autocomplete="off">
       <input id="chatInput" class="text-input" type="text" maxlength="80" placeholder="说点什么…" />
@@ -257,8 +257,8 @@
   </div>
 </div>
 
-<script src="./mqtt.min.js?v9" defer></script>
-<script src="./app.js?v9" defer></script>
-<script src="./net.js?v9" defer></script>
+<script src="./mqtt.min.js?v10" defer></script>
+<script src="./app.js?v10" defer></script>
+<script src="./net.js?v10" defer></script>
 </body>
 </html>
