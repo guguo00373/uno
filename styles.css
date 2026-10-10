@@ -472,3 +472,57 @@ button{font-family:inherit}
 .reveal-title{margin:0 0 10px;font-size:14px;font-weight:700;color:#5b5246}
 .reveal-cards{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .reveal-cards .card{--cw:52px;width:52px}
+/* ---------- AI 设置面板 ---------- */
+.ai-config{
+  margin-top:16px;padding:16px 18px;border-radius:16px;
+  background:#f6f2ff;border:1px solid #ddd2f5;animation:pop .2s ease;
+}
+.preset-row{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 6px}
+.preset-chip{
+  border:1px solid #d8cff0;background:#fff;border-radius:999px;padding:6px 13px;
+  font-size:12px;cursor:pointer;color:#5b4a86;font-family:inherit;
+}
+.preset-chip:hover{background:#efe8ff;border-color:#b9a6e8}
+.preset-chip.is-on{background:#6b4fd8;color:#fff;border-color:#6b4fd8}
+.ai-config-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+.ai-config-foot .primary-btn,.ai-config-foot .ghost-btn{padding:10px 20px;font-size:14px}
+.opponent-head .ai-tag{
+  font-size:10px;font-weight:800;color:#fff;background:#6b4fd8;
+  padding:2px 7px;border-radius:999px;margin-left:6px;
+}
+
+/* ---------- 房间聊天 ---------- */
+.chat-panel{position:fixed;right:18px;bottom:18px;z-index:55;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.chat-toggle{
+  border:none;border-radius:999px;padding:12px 20px;cursor:pointer;
+  background:var(--ink);color:#fff;font-size:14px;font-weight:700;font-family:inherit;
+  box-shadow:0 6px 18px rgba(35,30,24,.3);position:relative;
+}
+.chat-toggle:hover{transform:translateY(-1px)}
+.chat-badge{
+  position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;
+  font-size:11px;font-weight:800;border-radius:999px;padding:2px 7px;min-width:18px;
+}
+.chat-body{
+  width:min(330px,calc(100vw - 36px));height:min(400px,60vh);
+  background:var(--paper-2);border:1px solid var(--line);border-radius:18px;
+  box-shadow:0 18px 44px rgba(35,30,24,.28);display:flex;flex-direction:column;overflow:hidden;
+  animation:pop .2s ease;
+}
+.chat-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:700;
+}
+.chat-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--muted)}
+.chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{font-size:13px;line-height:1.6;word-break:break-word}
+.chat-msg .who{font-weight:700;color:#6b4fd8;margin-right:6px}
+.chat-msg.mine .who{color:var(--red)}
+.chat-msg.sys{color:var(--muted);font-size:12px;font-style:italic}
+.chat-form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.chat-form .text-input{padding:9px 13px;font-size:13px}
+.chat-form .primary-btn{padding:9px 16px;font-size:13px;box-shadow:0 4px 0 #0d0b08}
+@media (max-width:540px){
+  .chat-panel{right:10px;bottom:10px}
+  .chat-body{width:calc(100vw - 20px)}
+}
