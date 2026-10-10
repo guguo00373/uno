@@ -783,6 +783,7 @@
 
     API.netAction = function (action) { send(action); };
     API.chatSay = function (text, name) { sendChat(text, name || "AI"); };
+    API.onQuit = function () { if (net.role) leave(false); };
     API.onRender = function () { if (net.role === "host" && net.started) publishState(); };
     API.onGameEnd = function () { if (net.role === "host" && net.started) publishState(); };
 
