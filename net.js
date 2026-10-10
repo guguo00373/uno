@@ -447,12 +447,18 @@
     API.toast("AI 对手已加入，开局后会调用大模型");
   }
   var AI_PRESETS = [
-    { name: "OpenAI", base: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-    { name: "DeepSeek", base: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-    { name: "月之暗面", base: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
-    { name: "智谱GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
-    { name: "通义千问", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
-    { name: "硅基流动", base: "https://api.siliconflow.cn/v1", model: "Qwen/Qwen2.5-7B-Instruct" }
+    { name: "OpenAI", base: "https://api.openai.com/v1", model: "gpt-4o-mini",
+      models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"] },
+    { name: "DeepSeek", base: "https://api.deepseek.com/v1", model: "deepseek-chat",
+      models: ["deepseek-chat", "deepseek-reasoner"] },
+    { name: "月之暗面", base: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k",
+      models: ["moonshot-v1-8k", "moonshot-v1-32k", "kimi-k2-0905-preview"] },
+    { name: "智谱GLM", base: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash",
+      models: ["glm-4-flash", "glm-4-air", "glm-4-plus"] },
+    { name: "通义千问", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus",
+      models: ["qwen-plus", "qwen-turbo", "qwen-max"] },
+    { name: "硅基流动", base: "https://api.siliconflow.cn/v1", model: "Qwen/Qwen3.5-4B",
+      models: ["Qwen/Qwen3.5-4B", "Qwen/Qwen3.5-9B", "Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V3.2", "zai-org/GLM-4.5-Air"] }
   ];
   function getAiCfg() {
     try { return { base: localStorage.getItem("uno-ai-base") || "", key: localStorage.getItem("uno-ai-key") || "", model: localStorage.getItem("uno-ai-model") || "" }; }
@@ -466,6 +472,13 @@
       b.type = "button"; b.className = "preset-chip"; b.textContent = pz.name;
       b.addEventListener("click", function () {
         $("aiBase").value = pz.base; $("aiModel").value = pz.model;
+        var dl = $("aiModelList");
+        if (dl) {
+          dl.innerHTML = "";
+          (pz.models || []).forEach(function (mid) {
+            var op = document.createElement("option"); op.value = mid; dl.appendChild(op);
+          });
+        }
         Array.prototype.forEach.call(box.children, function (x) { x.classList.remove("is-on"); });
         b.classList.add("is-on");
       });
@@ -687,8 +700,10 @@
     if (!el.aiStatus) return;
     var c = getAiCfg();
     var mm = c.model || "";
-    if (/r1|reasoner|thinking|qwen3|qwq|glm-z1/i.test(mm)) {
-      el.aiStatus.textContent = "⚠️ " + mm + " 是推理模型，会先想很久再出牌（容易超时）。建议换成 qwen2.5-7b / deepseek-chat 这类普通模型";
+    if (/r1|reasoner|-thinking|thinking-|qwq|glm-z1/i.test(mm)) {
+      el.aiStatus.textContent = "⚠️ " + mm + " 是纯推理模型，会先想很久再出牌（容易超时）。建议换成 deepseek-chat / qwen-plus 这类普通模型";
+    } else if (/qwen3/i.test(mm)) {
+      el.aiStatus.textContent = "ℹ️ " + mm + " 默认会「思考」，本游戏已自动帮你关掉。如果还是慢，换更小的模型（如 Qwen/Qwen2.5-7B-Instruct）";
     } else if (!c.key) {
       el.aiStatus.textContent = "还没配置";
     } else {
