@@ -114,8 +114,8 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null,
-    busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 780
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null,
+    busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 1150
   };
 
   function n() { return state.players.length; }
@@ -224,6 +224,11 @@
       left.className = "who-name";
       left.textContent = p.name;
       who.appendChild(left);
+      if (p.ai) {
+        var aitag = document.createElement("span");
+        aitag.className = "ai-tag"; aitag.textContent = "AI";
+        who.appendChild(aitag);
+      }
       var right = document.createElement("span");
       right.className = "card-count";
       right.textContent = p.hand.length + " 张";
@@ -277,6 +282,10 @@
     } else if (state.challenge) {
       var cv = state.players[state.challenge.victim];
       banner.textContent = "等待 " + (cv ? cv.name : "对方") + " 决定是否质疑 +4…";
+      banner.classList.remove("hot");
+    } else if (state.aiThinking != null) {
+      var ap = state.players[state.aiThinking];
+      banner.textContent = (ap ? ap.name : "AI") + " 正在思考…";
       banner.classList.remove("hot");
     } else if (isBot(state.turn)) {
       banner.textContent = cur().name + " 正在想…";
@@ -495,18 +504,26 @@
     maybeScheduleBot();
   }
 
+  function botJitter(base) {
+    var b = base || 1100;
+    return Math.round(b + Math.random() * b * 0.9);
+  }
   function maybeScheduleBot() {
     clearTimeout(state.timer);
     if (state.over) return;
     if (state.challenge) return;
     if (state.role === "guest") return;
     if (!isBot(state.turn)) return;
+    var seat = state.turn;
     state.busy = true;
     render();
     state.timer = setTimeout(function () {
+      if (state.over || state.turn !== seat || state.challenge) { state.busy = false; render(); return; }
       state.busy = false;
-      botMove();
-    }, state.botDelay);
+      var p = state.players[seat];
+      if (p && p.ai) aiMove(seat);
+      else botMove();
+    }, botJitter(state.botDelay));
   }
 
   // ---------------- 电脑出牌 ----------------
@@ -547,7 +564,7 @@
       setTimeout(function () {
         if (state.over || state.turn !== pi) return;
         playCard(pi, c, c.c === "wild" ? bestColor(pi, c) : null);
-      }, Math.max(60, state.botDelay * 0.7));
+      }, botJitter(state.botDelay * 0.6));
       return;
     }
     log(p.name + " 抽了一张，过牌");
@@ -632,14 +649,159 @@
     render();
   }
 
+  // ---------------- 大模型 AI 对手 ----------------
+  var AI_PRESETS = [
+    { name: "OpenAI",   base: "https://api.openai.com/v1",                  model: "gpt-4o-mini" },
+    { name: "DeepSeek", base: "https://api.deepseek.com/v1",                model: "deepseek-chat" },
+    { name: "月之暗面", base: "https://api.moonshot.cn/v1",                 model: "moonshot-v1-8k" },
+    { name: "智谱GLM",  base: "https://open.bigmodel.cn/api/paas/v4",       model: "glm-4-flash" },
+    { name: "通义千问", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+    { name: "硅基流动", base: "https://api.siliconflow.cn/v1",              model: "Qwen/Qwen2.5-7B-Instruct" }
+  ];
+  function getAiConfig() {
+    try {
+      return {
+        base: localStorage.getItem("uno-ai-base") || "",
+        key: localStorage.getItem("uno-ai-key") || "",
+        model: localStorage.getItem("uno-ai-model") || ""
+      };
+    } catch (e) { return { base: "", key: "", model: "" }; }
+  }
+  function saveAiConfig(c) {
+    try {
+      localStorage.setItem("uno-ai-base", c.base || "");
+      localStorage.setItem("uno-ai-key", c.key || "");
+      localStorage.setItem("uno-ai-model", c.model || "");
+      return true;
+    } catch (e) { return false; }
+  }
+  function cardDesc(c) {
+    var col = COLOR_CN[c.c] || "";
+    if (c.v === "wild") return "【变色牌】";
+    if (c.v === "wild4") return "【+4变色牌】";
+    if (c.v === "skip") return col + "跳过";
+    if (c.v === "reverse") return col + "反转";
+    if (c.v === "draw2") return col + "+2";
+    return col + c.v;
+  }
+  var AI_SYSTEM = [
+    "你是一名 UNO 牌手，正在和朋友对战。规则：",
+    "1. 打出的牌要和「当前颜色」相同，或和牌堆顶的数字/符号相同；变色牌、+4 变色牌随时能出。",
+    "2. +4 变色牌只有在你手里没有「当前颜色」的牌时才合法，否则会被质疑，你要自己抽 4 张。",
+    "3. 打出变色牌或 +4 时必须指定新颜色。",
+    "4. 手里有能打的牌时优先打出去，不要无故抽牌；确实没牌能打才抽。",
+    "5. 对手快赢（剩 1-2 张）时，优先用 +2 / 跳过 / 反转 / +4 卡住他。",
+    "只输出一个 JSON，不要任何解释文字：",
+    "出牌 {\"action\":\"play\",\"id\":手牌里的id数字,\"color\":\"red|yellow|green|blue\"}",
+    "抽牌 {\"action\":\"draw\"}"
+  ].join("\n");
+  function aiPrompt(seat) {
+    var p = state.players[seat];
+    var top = state.discard[state.discard.length - 1];
+    var L = [];
+    L.push("牌堆顶：" + cardDesc(top));
+    L.push("当前颜色：" + (COLOR_CN[state.color] || state.color));
+    L.push("出牌方向：" + (state.dir === 1 ? "顺时针" : "逆时针"));
+    L.push("你的手牌（一共 " + p.hand.length + " 张）：");
+    p.hand.forEach(function (c) { L.push("  id=" + c.id + "  " + cardDesc(c)); });
+    L.push("其他玩家：" + state.players.map(function (x, i) {
+      return i === seat ? null : x.name + " 剩 " + x.hand.length + " 张";
+    }).filter(Boolean).join("，"));
+    L.push("");
+    L.push("请决定这一手怎么打。");
+    return L.join("\n");
+  }
+  function parseAiAction(text) {
+    if (!text) return null;
+    var m = String(text).match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try { return JSON.parse(m[0]); } catch (e) { return null; }
+  }
+  function aiSay(text, name) {
+    if (!text) return;
+    var api = window.__UNO_API__;
+    if (api && api.chatSay) { try { api.chatSay(text, name); } catch (e) {} }
+  }
+  function aiApply(seat, act) {
+    if (!act || state.over || state.turn !== seat || state.challenge) return false;
+    var p = state.players[seat];
+    if (!p) return false;
+    if (act.action === "draw") {
+      var drew = drawForSeat(seat);
+      if (!drew) return false;
+      if (state.canPass && state.turn === seat && !state.over) {
+        setTimeout(function () {
+          if (!state.over && state.turn === seat && state.canPass) aiMove(seat);
+        }, botJitter(state.botDelay * 0.6));
+      }
+      return true;
+    }
+    if (act.action === "play") {
+      var card = p.hand.filter(function (c) { return String(c.id) === String(act.id); })[0];
+      if (!card || !canPlay(card)) return false;
+      var color = card.c === "wild" ? (act.color || bestColor(seat, card)) : null;
+      playCard(seat, card, color);
+      return true;
+    }
+    return false;
+  }
+  function aiMove(seat) {
+    var conf = getAiConfig();
+    var p = state.players[seat];
+    if (!conf.key || !conf.base || !conf.model) {
+      log(p.name + " 还没配置模型，先用普通策略");
+      botMove();
+      return;
+    }
+    state.aiThinking = seat;
+    render();
+    var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 25000);
+    var url = conf.base.replace(/\/+$/, "") + "/chat/completions";
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + conf.key },
+      body: JSON.stringify({
+        model: conf.model,
+        temperature: 0.6,
+        messages: [
+          { role: "system", content: AI_SYSTEM },
+          { role: "user", content: aiPrompt(seat) }
+        ]
+      }),
+      signal: ctl ? ctl.signal : undefined
+    }).then(function (r) {
+      return r.text().then(function (txt) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return JSON.parse(txt);
+      });
+    }).then(function (data) {
+      clearTimeout(timer);
+      state.aiThinking = null;
+      var msg = (data && data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : "";
+      var talk = String(msg || "").replace(/\{[\s\S]*\}/, "").trim();
+      if (talk) { log(p.name + "：" + talk.slice(0, 50)); aiSay(talk.slice(0, 60), p.name); }
+      var act = parseAiAction(msg);
+      if (!aiApply(seat, act)) {
+        log(p.name + " 这步没走通，改用自己的判断");
+        botMove();
+      } else { render(); }
+    }).catch(function (err) {
+      clearTimeout(timer);
+      state.aiThinking = null;
+      var why = (err && err.name === "AbortError") ? "超时" : ((err && err.message) ? err.message.slice(0, 40) : "网络问题");
+      log(p.name + " 调用模型失败（" + why + "），改用普通策略");
+      botMove();
+    });
+  }
   // ---------------- 联机：房主代客机执行 ----------------
   function drawForSeat(seat) {
-    if (state.over) return;
+    if (state.over) return false;
     var p = state.players[seat];
-    if (!p || state.canPass) return;
+    if (!p || state.canPass) return false;
     var got = drawTo(p, 1);
     SFX.draw();
-    if (!got.length) { passTurn(seat, 1); return; }
+    if (!got.length) { passTurn(seat, 1); return true; }
     if (canPlay(got[0])) {
       state.canPass = true;
       log(p.name + " 抽了一张能打的牌");
@@ -648,6 +810,7 @@
       log(p.name + " 抽了一张，过牌");
       passTurn(seat, 1);
     }
+    return true;
   }
   function passForSeat(seat) {
     if (state.over || !state.canPass) return;
@@ -737,7 +900,7 @@
         ? ["你", "电脑 A", "电脑 B", "电脑 C"]
         : ["玩家 1", "玩家 2", "玩家 3", "玩家 4"]);
     var players = [];
-    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "bot" && i !== 0), avatar: roster && roster[i] && roster[i].avatar != null ? roster[i].avatar : i });
+    for (var i = 0; i < count; i++) players.push({ name: names[i], hand: [], bot: roster ? !!roster[i].bot : (mode === "bot" && i !== 0), avatar: roster && roster[i] && roster[i].avatar != null ? roster[i].avatar : i, ai: roster && roster[i] ? !!roster[i].ai : false });
 
     // 发牌
     for (var r = 0; r < 7; r++) {
@@ -763,6 +926,7 @@
     state.canPass = false;
     state.unoCalled = players.map(function () { return false; });
     state.exposed = players.map(function () { return false; });
+    state.aiThinking = null;
     clearTimeout(state.challengeTimer); state.challengeTimer = null;
     clearTimeout(state.revealTimer); state.revealTimer = null;
     state.challenge = null; state.reveal = null;
@@ -923,13 +1087,15 @@
     avatarName: avatarName,
     callUnoFor: callUnoFor,
     catchUnoFor: catchUnoFor,
+    chatSay: null,
     respondChallenge: respondChallenge,
     humanDrawFor: drawForSeat,
     passFor: passForSeat,
     netAction: null,
     onRender: null,
     onGameEnd: null,
-    onQuit: null
+    onQuit: null,
+    onAiDone: null
   };
   els.home.hidden = false;
   els.game.hidden = true;
