@@ -196,7 +196,11 @@
       }
     }
   }
-  function bottomIndex() { if (state.mode === "net") return state.seat || 0; return state.mode === "bot" ? 0 : state.turn; }
+  function bottomIndex() {
+    if (state.mode === "net") return state.seat || 0;
+    if (state.mode === "local") return state.turn;
+    return 0;
+  }
 
   function render() {
     renderOpponents();
