@@ -422,6 +422,9 @@ button{font-family:inherit}
 }
 .lobby-del:hover{background:var(--red);color:#fff}
 .ghost-btn:disabled,.primary-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+/* 全局：hidden 属性必须真的隐藏（否则被 display:flex 等覆盖） */
+[hidden]{display:none !important}
+
 /* ---------- 卡哇伊头像 ---------- */
 .avatar{display:block;object-fit:contain;background:#f4ecdc;border-radius:50%;flex:0 0 auto}
 .opponent-head .who{display:flex;align-items:center;gap:8px;min-width:0}
