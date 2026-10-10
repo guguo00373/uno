@@ -114,7 +114,7 @@
   var state = {
     players: [], deck: [], discard: [], turn: 0, dir: 1, color: null,
     mode: "bot", count: 4, round: 1, scores: [], wins: [], seat: 0, role: "local", roster: null, winnerIndex: null,
-    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false, aiLastError: "",
+    over: true, canPass: false, unoCalled: [], exposed: [], revealed: true, challenge: null, reveal: null, aiThinking: null, autoPlay: false, aiLastError: "", aiFailStreak: 0,
     busy: false, timer: null, graceTimer: null, graceLeft: 0, botDelay: 1150
   };
 
@@ -289,7 +289,14 @@
       banner.classList.remove("hot");
     } else if (state.aiThinking != null) {
       var ap = state.players[state.aiThinking];
-      banner.textContent = (ap ? ap.name : "AI") + " 正在思考…";
+      if (state.autoPlay && Number(state.aiThinking) === Number(bottomIndex())) {
+        banner.textContent = "\uD83E\uDD16 AI 托管正在替你出牌…";
+      } else {
+        banner.textContent = (ap ? ap.name : "AI") + " 正在思考…";
+      }
+      banner.classList.remove("hot");
+    } else if (state.busy && state.autoPlay && Number(state.turn) === Number(bottomIndex())) {
+      banner.textContent = "\uD83E\uDD16 AI 托管正在替你思考…";
       banner.classList.remove("hot");
     } else if (isBot(state.turn)) {
       banner.textContent = cur().name + " 正在想…";
@@ -734,9 +741,12 @@
   }
   function parseAiAction(text) {
     if (!text) return null;
-    var m = String(text).match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try { return JSON.parse(m[0]); } catch (e) { return null; }
+    var s = String(text).replace(/[\s\S]*?<\/think>/gi, "");
+    var all = s.match(/\{[\s\S]*?\}/g) || [];
+    for (var i = all.length - 1; i >= 0; i--) {
+      try { var o = JSON.parse(all[i]); if (o && o.action) return o; } catch (e) {}
+    }
+    return null;
   }
   function refreshAiHome() {
     var box = document.getElementById("aiHomeStatus");
@@ -797,19 +807,24 @@
     state.aiThinking = seat;
     render();
     var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 25000);
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 40000);
     var url = conf.base.replace(/\/+$/, "") + "/chat/completions";
+    var reqBody = {
+      model: conf.model,
+      temperature: 0.6,
+      max_tokens: 200,
+      messages: [
+        { role: "system", content: AI_SYSTEM },
+        { role: "user", content: aiPrompt(seat) }
+      ]
+    };
+    // 国内服务商支持关闭「思考模式」：推理模型开着思考会非常慢，容易超时
+    var looksThink = /(siliconflow|dashscope|aliyuncs|bigmodel|moonshot)/i.test(conf.base) || /(qwen3|qwen-3|thinking|reasoner|qwq)/i.test(conf.model);
+    if (looksThink) reqBody.enable_thinking = false;
     fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + conf.key },
-      body: JSON.stringify({
-        model: conf.model,
-        temperature: 0.6,
-        messages: [
-          { role: "system", content: AI_SYSTEM },
-          { role: "user", content: aiPrompt(seat) }
-        ]
-      }),
+      body: JSON.stringify(reqBody),
       signal: ctl ? ctl.signal : undefined
     }).then(function (r) {
       return r.text().then(function (txt) {
@@ -826,7 +841,7 @@
     }).then(function (data) {
       clearTimeout(timer);
       state.aiThinking = null;
-      state.aiLastError = "";
+      state.aiLastError = ""; state.aiFailStreak = 0;
       var msg = (data && data.choices && data.choices[0] && data.choices[0].message) ? data.choices[0].message.content : "";
       var talk = String(msg || "").replace(/\{[\s\S]*\}/, "").trim();
       if (talk) { log(p.name + "：" + talk.slice(0, 50)); aiSay(talk.slice(0, 60), p.name); }
@@ -844,7 +859,14 @@
       else why = (err && err.message) ? err.message : "网络问题";
       var detail = why + "  ←  " + url;
       state.aiLastError = detail;
-      log(p.name + " 调用模型失败：" + why);
+      state.aiFailStreak = (state.aiFailStreak || 0) + 1;
+      log(p.name + " 调用模型失败（第 " + state.aiFailStreak + " 次）：" + why);
+      if (state.aiFailStreak === 2) toast("AI 连续失败，建议检查「AI 设置」或换个更快的模型");
+      if (state.aiFailStreak >= 3 && state.autoPlay) {
+        state.autoPlay = false;
+        try { localStorage.setItem("uno-autoplay", "0"); } catch (e3) {}
+        toast("AI 一直失败，已自动关闭托管，改用内置策略");
+      }
       if (window.__UNO_API__ && window.__UNO_API__.onAiError) window.__UNO_API__.onAiError(detail);
       toast("AI 调用失败：" + why.slice(0, 40));
       botMove();
